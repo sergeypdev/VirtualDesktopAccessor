@@ -1,4 +1,7 @@
-/// This module contains COM object for accessing the Windows Virtual Desktop API
+//! This module contains COM object for accessing the Windows Virtual Desktop API
+#![allow(clippy::bool_assert_comparison)]
+#![allow(clippy::upper_case_acronyms)]
+
 use super::interfaces::*;
 use super::Result;
 use std::convert::TryFrom;
@@ -263,7 +266,7 @@ impl ComObjects {
 
         provider
             .as_ref()
-            .map(|v| Rc::clone(&v))
+            .map(Rc::clone)
             .ok_or(Error::ComAllocatedNullPtr)
     }
 
@@ -289,7 +292,7 @@ impl ComObjects {
         }
         manager
             .as_ref()
-            .map(|v| Rc::clone(&v))
+            .map(Rc::clone)
             .ok_or(Error::ComAllocatedNullPtr)
     }
 
@@ -317,7 +320,7 @@ impl ComObjects {
         }
         manager_internal
             .as_ref()
-            .map(|v| Rc::clone(&v))
+            .map(Rc::clone)
             .ok_or(Error::ComAllocatedNullPtr)
     }
 
@@ -345,7 +348,7 @@ impl ComObjects {
         }
         notification_service
             .as_ref()
-            .map(|v| Rc::clone(&v))
+            .map(Rc::clone)
             .ok_or(Error::ComAllocatedNullPtr)
     }
 
@@ -372,7 +375,7 @@ impl ComObjects {
         pinned_apps
             .as_ref()
             .ok_or(Error::ComAllocatedNullPtr)
-            .map(|a| Rc::clone(a))
+            .map(Rc::clone)
     }
 
     fn get_view_collection(&self) -> Result<Rc<IApplicationViewCollection>> {
@@ -399,7 +402,7 @@ impl ComObjects {
         }
         view_collection
             .as_ref()
-            .map(|v| Rc::clone(&v))
+            .map(Rc::clone)
             .ok_or(Error::ComAllocatedNullPtr)
     }
 
@@ -538,7 +541,7 @@ impl ComObjects {
         let mut view = None;
         unsafe {
             self.get_view_collection()?
-                .get_view_for_hwnd(hwnd.clone(), &mut view)
+                .get_view_for_hwnd(*hwnd, &mut view)
                 .as_result()
                 .map_err(|er| {
                     if er == Error::ComElementNotFound {
@@ -649,7 +652,7 @@ impl ComObjects {
     #[apply(retry_function)]
     pub fn is_window_on_desktop(&self, window: &HWND, desktop: &DesktopInternal) -> Result<bool> {
         let desktop_win = self.get_desktop_by_window(window)?;
-        Ok(self.get_desktop_id(&desktop_win)? == self.get_desktop_id(&*desktop)?)
+        Ok(self.get_desktop_id(&desktop_win)? == self.get_desktop_id(desktop)?)
     }
 
     #[apply(retry_function)]
@@ -657,7 +660,7 @@ impl ComObjects {
         unsafe {
             let mut value = false;
             self.get_manager()?
-                .is_window_on_current_desktop(window.clone(), &mut value)
+                .is_window_on_current_desktop(*window, &mut value)
                 .as_result()
                 .map_err(|er| match er {
                     // Window does not exist
@@ -689,7 +692,7 @@ impl ComObjects {
         let mut desktop = GUID::default();
         unsafe {
             self.get_manager()?
-                .get_desktop_by_window(window.clone(), &mut desktop)
+                .get_desktop_by_window(*window, &mut desktop)
                 .as_result()
                 .map_err(|er| match er {
                     // Window does not exist
@@ -795,7 +798,7 @@ impl ComObjects {
 
     #[apply(retry_function)]
     pub fn get_desktop_name(&self, desktop: &DesktopInternal) -> Result<String> {
-        let desktop = self.get_idesktop(&desktop)?;
+        let desktop = self.get_idesktop(desktop)?;
         let mut name = HSTRING::default();
         unsafe {
             desktop.get_name(&mut name).as_result()?;
@@ -805,7 +808,7 @@ impl ComObjects {
 
     #[apply(retry_function)]
     pub fn set_desktop_name(&self, desktop: &DesktopInternal, name: &str) -> Result<()> {
-        let desktop = self.get_idesktop(&desktop)?;
+        let desktop = self.get_idesktop(desktop)?;
         let manager_internal = self.get_manager_internal()?;
 
         unsafe {
@@ -817,7 +820,7 @@ impl ComObjects {
 
     #[apply(retry_function)]
     pub fn get_desktop_wallpaper(&self, desktop: &DesktopInternal) -> Result<String> {
-        let desktop = self.get_idesktop(&desktop)?;
+        let desktop = self.get_idesktop(desktop)?;
         let mut path = HSTRING::default();
         unsafe {
             desktop.get_wallpaper(&mut path).as_result()?;
@@ -864,5 +867,5 @@ where
     // });
 
     // return COM_OBJECTS.with(|c| run_function_and_retry(&f, &c));
-    return COM_OBJECTS.with(|c| f(&c));
+    COM_OBJECTS.with(|c| f(c))
 }

@@ -95,37 +95,37 @@ impl<'a> TryFrom<ComIn<'a, IVirtualDesktop>> for Desktop {
 impl Desktop {
     /// Get the GUID of the desktop
     pub fn get_id(&self) -> Result<GUID> {
-        let internal = self.0.clone();
+        let internal = self.0;
         with_com_objects(move |o| o.get_desktop_id(&internal))
     }
 
     pub fn get_index(&self) -> Result<u32> {
-        let internal = self.0.clone();
+        let internal = self.0;
         with_com_objects(move |o| o.get_desktop_index(&internal))
     }
 
     /// Get desktop name
     pub fn get_name(&self) -> Result<String> {
-        let internal = self.0.clone();
+        let internal = self.0;
         with_com_objects(move |o| o.get_desktop_name(&internal))
     }
 
     /// Set desktop name
     pub fn set_name(&self, name: &str) -> Result<()> {
-        let internal = self.0.clone();
+        let internal = self.0;
         let name_ = name.to_owned();
         with_com_objects(move |o| o.set_desktop_name(&internal, &name_))
     }
 
     /// Get desktop wallpaper path
     pub fn get_wallpaper(&self) -> Result<String> {
-        let internal = self.0.clone();
+        let internal = self.0;
         with_com_objects(move |o| o.get_desktop_wallpaper(&internal))
     }
 
     /// Set desktop wallpaper path
     pub fn set_wallpaper(&self, path: &str) -> Result<()> {
-        let internal = self.0.clone();
+        let internal = self.0;
         let path_ = path.to_owned();
         with_com_objects(move |o| o.set_desktop_wallpaper(&internal, &path_))
     }
@@ -181,7 +181,7 @@ where
     T: Into<Desktop>,
     T: Send + 'static + Copy,
 {
-    let hwnd = hwnd.clone();
+    let hwnd = *hwnd;
     with_com_objects(move |o| o.move_window_to_desktop(&hwnd, &desktop.into().into()))
 }
 

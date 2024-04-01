@@ -141,7 +141,7 @@ impl<'a> VirtualDesktopNotificationWrapper<'a> {
         sender: Box<dyn Fn(DesktopEvent)>,
     ) -> Result<Pin<Box<VirtualDesktopNotificationWrapper>>> {
         let ptr: Pin<Box<IVirtualDesktopNotification>> =
-            Pin::new(Box::new(VirtualDesktopNotification { sender }.into()));
+            Box::pin(VirtualDesktopNotification { sender }.into());
         let raw_ptr = ptr.as_raw();
         let cookie = com_objects.register_for_notifications(raw_ptr)?;
         let notification = Pin::new(Box::new(VirtualDesktopNotificationWrapper {
