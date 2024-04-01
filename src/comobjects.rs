@@ -171,7 +171,7 @@ pub struct ComObjects {
     view_collection: RefCell<Option<Rc<IApplicationViewCollection>>>,
 }
 
-fn retry_function<F, R>(com_objects: &ComObjects, f: F) -> Result<R>
+fn retry_function<F, R>(com_objects: &ComObjects, f: F, fn_name: &str) -> Result<R>
 where
     F: Fn() -> Result<R>,
 {
@@ -186,7 +186,7 @@ where
                     || er == &Error::ComNotInitialized =>
             {
                 #[cfg(debug_assertions)]
-                log_output(&format!("Retry the function after {:?}", er));
+                log_output(&format!("Retry the function \"{fn_name}\" after {:?}", er));
 
                 if er == &Error::ComNotInitialized {
                     let _ = unsafe { CoIncrementMTAUsage() };
@@ -208,7 +208,10 @@ where
 
     #[cfg(debug_assertions)]
     if let Err(er) = &value {
-        log_output(&format!("Com_objects function failed with {:?}", er));
+        log_output(&format!(
+            "Com_objects function \"{fn_name}\" failed with {:?}",
+            er
+        ));
     }
 
     value
@@ -236,7 +239,7 @@ macro_rules! retry_function {(
     {
         retry_function(&$self_, || -> $RetTy {
             $body
-        })
+        }, stringify!($fname))
     }
 )}
 
