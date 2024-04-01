@@ -52,6 +52,15 @@ pub enum Error {
     /// Generic element not found
     ComElementNotFound,
 
+    /// A requested interface was not supported. Windows might have changed the
+    /// definitions of some unstable virtual desktop interfaces used by this
+    /// library.
+    ComNoInterface,
+
+    /// Not implemented. When supporting multiple Windows versions this is
+    /// returned for methods that don't exist in the current version.
+    ComNotImplemented,
+
     /// Some unhandled COM error
     ComError(HRESULT),
 
@@ -71,27 +80,37 @@ trait HRESULTHelpers {
 
 impl HRESULTHelpers for ::windows::core::HRESULT {
     fn as_error(&self) -> Error {
-        if self.0 == -2147221164 {
-            // 0x80040154
-            return Error::ClassNotRegistered;
+        match self.0 {
+            -2147221164 => {
+                // 0x80040154
+                Error::ClassNotRegistered
+            }
+            -2147023174 => {
+                // 0x800706BA
+                Error::RpcServerNotAvailable
+            }
+            -2147220995 => {
+                // 0x800401FD
+                Error::ComObjectNotConnected
+            }
+            -2147319765 => {
+                // 0x8002802B
+                Error::ComElementNotFound
+            }
+            -2147221008 => {
+                // 0x800401F0
+                Error::ComNotInitialized
+            }
+            -2147467262 => {
+                // 0x80004002
+                Error::ComNoInterface
+            }
+            -2147467263 => {
+                // 0x80004001
+                Error::ComNotImplemented
+            }
+            _ => Error::ComError(*self),
         }
-        if self.0 == -2147023174 {
-            // 0x800706BA
-            return Error::RpcServerNotAvailable;
-        }
-        if self.0 == -2147220995 {
-            // 0x800401FD
-            return Error::ComObjectNotConnected;
-        }
-        if self.0 == -2147319765 {
-            // 0x8002802B
-            return Error::ComElementNotFound;
-        }
-        if self.0 == -2147221008 {
-            // 0x800401F0
-            return Error::ComNotInitialized;
-        }
-        Error::ComError(self.clone())
     }
 
     fn as_result(&self) -> Result<()> {
