@@ -3,7 +3,7 @@ use std::pin::Pin;
 use std::time::Duration;
 
 use crate::comobjects::ComObjects;
-use crate::interfaces::{
+use crate::interfaces_multi::{
     ComIn, IApplicationView, IVirtualDesktop, IVirtualDesktopNotification,
     IVirtualDesktopNotification_Impl,
 };
@@ -11,6 +11,7 @@ use crate::log::log_output;
 use crate::DesktopEventSender;
 use crate::{DesktopEvent, Result};
 
+#[allow(unused_imports)]
 use windows::core::{Interface, HRESULT, HSTRING};
 use windows::Win32::Foundation::HWND;
 use windows::Win32::System::Threading::{
@@ -173,7 +174,7 @@ impl<'a> Drop for VirtualDesktopNotificationWrapper<'a> {
     }
 }
 
-#[windows::core::implement(IVirtualDesktopNotification)]
+#[cfg_attr(not(feature = "multiple-windows-versions"), windows::core::implement(IVirtualDesktopNotification))]
 struct VirtualDesktopNotification {
     sender: Box<dyn Fn(DesktopEvent)>,
 }

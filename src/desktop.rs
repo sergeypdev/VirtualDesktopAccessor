@@ -1,7 +1,6 @@
-use crate::interfaces::ComIn;
-
 use super::comobjects::*;
-use super::{interfaces::IVirtualDesktop, *};
+use super::interfaces_multi::{ComIn, IVirtualDesktop};
+use super::*;
 use std::{convert::TryFrom, fmt::Debug};
 use windows::{core::GUID, Win32::Foundation::HWND};
 

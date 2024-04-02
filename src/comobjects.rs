@@ -1,8 +1,7 @@
 //! This module contains COM object for accessing the Windows Virtual Desktop API
-#![allow(clippy::bool_assert_comparison)]
 #![allow(clippy::upper_case_acronyms)]
 
-use super::interfaces::*;
+use super::interfaces_multi::*;
 use super::Result;
 use std::convert::TryFrom;
 use std::rc::Rc;
@@ -73,7 +72,7 @@ pub enum Error {
     InternalBorrowError,
 }
 
-trait HRESULTHelpers {
+pub(crate) trait HRESULTHelpers {
     fn as_error(&self) -> Error;
     fn as_result(&self) -> Result<()>;
 }
@@ -324,20 +323,9 @@ impl ComObjects {
             .try_borrow_mut()
             .map_err(|_| Error::InternalBorrowError)?;
         if manager_internal.is_none() {
-            let mut obj = std::ptr::null_mut::<c_void>();
             let provider = self.get_provider()?;
-            unsafe {
-                provider
-                    .query_service(
-                        &CLSID_VirtualDesktopManagerInternal,
-                        &IVirtualDesktopManagerInternal::IID,
-                        &mut obj,
-                    )
-                    .as_result()?;
-            }
-            assert_eq!(obj.is_null(), false);
             *manager_internal = Some(Rc::new(unsafe {
-                IVirtualDesktopManagerInternal::from_raw(obj)
+                IVirtualDesktopManagerInternal::query_service(&provider)?
             }));
         }
         manager_internal
@@ -353,19 +341,8 @@ impl ComObjects {
             .map_err(|_| Error::InternalBorrowError)?;
         if notification_service.is_none() {
             let provider = self.get_provider()?;
-            let mut obj = std::ptr::null_mut::<c_void>();
-            unsafe {
-                provider
-                    .query_service(
-                        &CLSID_IVirtualNotificationService,
-                        &IVirtualDesktopNotificationService::IID,
-                        &mut obj,
-                    )
-                    .as_result()?;
-            }
-            assert_eq!(obj.is_null(), false);
             *notification_service = Some(Rc::new(unsafe {
-                IVirtualDesktopNotificationService::from_raw(obj)
+                IVirtualDesktopNotificationService::query_service(&provider)?
             }));
         }
         notification_service
@@ -381,18 +358,7 @@ impl ComObjects {
             .map_err(|_| Error::InternalBorrowError)?;
         if pinned_apps.is_none() {
             let provider = self.get_provider()?;
-            let mut obj = std::ptr::null_mut::<c_void>();
-            unsafe {
-                provider
-                    .query_service(
-                        &CLSID_VirtualDesktopPinnedApps,
-                        &IVirtualDesktopPinnedApps::IID,
-                        &mut obj,
-                    )
-                    .as_result()?;
-            }
-            assert_eq!(obj.is_null(), false);
-            *pinned_apps = Some(Rc::new(unsafe { IVirtualDesktopPinnedApps::from_raw(obj) }));
+            *pinned_apps = Some(Rc::new(unsafe { IVirtualDesktopPinnedApps::query_service(&provider)? }));
         }
         pinned_apps
             .as_ref()
@@ -407,19 +373,8 @@ impl ComObjects {
             .map_err(|_| Error::InternalBorrowError)?;
         if view_collection.is_none() {
             let provider = self.get_provider()?;
-            let mut obj = std::ptr::null_mut::<c_void>();
-            unsafe {
-                provider
-                    .query_service(
-                        &IApplicationViewCollection::IID,
-                        &IApplicationViewCollection::IID,
-                        &mut obj,
-                    )
-                    .as_result()?;
-            }
-            assert_eq!(obj.is_null(), false);
             *view_collection = Some(Rc::new(unsafe {
-                IApplicationViewCollection::from_raw(obj)
+                IApplicationViewCollection::query_service(&provider)?
             }));
         }
         view_collection
@@ -492,7 +447,7 @@ impl ComObjects {
         let desktops = self.get_idesktops_array()?;
         let count = unsafe { desktops.GetCount()? };
         for i in 0..count {
-            let desktop_id: GUID = get_idesktop_guid(&unsafe { desktops.GetAt(i)? })?;
+            let desktop_id: GUID = get_idesktop_guid(&unsafe { IObjectArrayGetAt(&desktops, i)? })?;
             if desktop_id == *id {
                 return Ok(i);
             }
@@ -506,7 +461,7 @@ impl ComObjects {
         if id >= count {
             return Err(Error::DesktopNotFound);
         }
-        get_idesktop_guid(&unsafe { desktops.GetAt(id)? })
+        get_idesktop_guid(&unsafe { IObjectArrayGetAt(&desktops, id)? })
     }
 
     fn get_idesktop(&self, desktop: &DesktopInternal) -> Result<IVirtualDesktop> {
@@ -517,7 +472,7 @@ impl ComObjects {
                 if *id >= count {
                     return Err(Error::DesktopNotFound);
                 }
-                Ok(unsafe { desktops.GetAt(*id)? })
+                Ok(unsafe { IObjectArrayGetAt(&desktops, *id)? })
             }
             DesktopInternal::Guid(id) => {
                 let manager = self.get_manager_internal()?;
@@ -600,7 +555,7 @@ impl ComObjects {
         let count = unsafe { desktops.GetCount()? };
         let mut result = Vec::with_capacity(count as usize);
         for i in 0..count {
-            let desktop = unsafe { desktops.GetAt(i)? };
+            let desktop = unsafe { IObjectArrayGetAt(&desktops, i)? };
             let id = get_idesktop_guid(&desktop)?;
             result.push(DesktopInternal::IndexGuid(i, id));
         }
