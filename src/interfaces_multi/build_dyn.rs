@@ -79,7 +79,9 @@ impl Default for WindowsVersion {
 //      }
 // }
 impl WindowsVersion {
-    fn windows_build(&self) -> (u32, u32) {
+    /// Returns the Windows build and Windows patch that a Rust module with COM
+    /// interfaces supports. (It might support some later versions as well.)
+    fn windows_version(&self) -> (u32, u32) {
         let (_, version) = self
             .as_str()
             .split_once('_')
@@ -95,6 +97,49 @@ impl WindowsVersion {
                 .parse()
                 .expect("Failed to parse module suffix as patch version"),
         )
+    }
+    /// Get the Windows patch version (the last number in the full version).
+    ///
+    /// # References
+    ///
+    /// - This is how the C# VirtualDesktop library does it: [VirtualDesktop/src/VirtualDesktop/Utils/OS.cs at 7e37b9848aef681713224dae558d2e51960cf41e · mzomparelli/VirtualDesktop](https://github.com/mzomparelli/VirtualDesktop/blob/7e37b9848aef681713224dae558d2e51960cf41e/src/VirtualDesktop/Utils/OS.cs#L21)
+    /// - We use this function: [RegGetValueW in windows::Win32::System::Registry - Rust](https://microsoft.github.io/windows-docs-rs/doc/windows/Win32/System/Registry/fn.RegGetValueW.html)
+    ///   - Function docs: [RegGetValueW function (winreg.h) - Win32 apps | Microsoft Learn](https://learn.microsoft.com/en-us/windows/win32/api/winreg/nf-winreg-reggetvaluew)
+    ///   - StackOverflow usage example: [windows - RegGetValueW(), how to do it right - Stack Overflow](https://stackoverflow.com/questions/78224404/reggetvaluew-how-to-do-it-right)
+    /// - Info about the registry key: [.net - C# - How to show the full Windows 10 build number? - Stack Overflow](https://stackoverflow.com/questions/52041735/c-sharp-how-to-show-the-full-windows-10-build-number)
+    fn read_patch_version_from_registry() -> Option<u32> {
+        use windows::{
+            core::w,
+            Win32::System::Registry::{RegGetValueW, HKEY_LOCAL_MACHINE, RRF_RT_REG_DWORD},
+        };
+
+        let mut buffer: [u8; 4] = [0; 4];
+        let mut cb_data = buffer.len() as u32;
+        let res = unsafe {
+            RegGetValueW(
+                HKEY_LOCAL_MACHINE,
+                w!(r#"SOFTWARE\Microsoft\Windows NT\CurrentVersion"#),
+                w!("UBR"),
+                RRF_RT_REG_DWORD,
+                Some(std::ptr::null_mut()),
+                Some(buffer.as_mut_ptr() as _),
+                Some(&mut cb_data as *mut u32),
+            )
+        };
+        if let Err(e) = res {
+            log_format!("Failed to read Windows patch version from the registry: {e:?}");
+            return None;
+        }
+
+        // REG_DWORD is signed 32-bit, using little endian
+        let patch_version = i32::from_le_bytes(buffer);
+        if patch_version < 0 {
+            log_format!(
+                "Windows patch version read from the registry was negative \
+                ({patch_version}), ignoring read value"
+            );
+        }
+        u32::try_from(patch_version).ok()
     }
     /// Get info about the current Windows version. Only differentiates between
     /// Windows versions that have different virtual desktop interfaces.
@@ -143,21 +188,29 @@ impl WindowsVersion {
                 );
                 return Default::default();
             }
-            // FIXME: we don't get the patch version of Windows and just assume the user is on the latest one.
+            let patch_version = Self::read_patch_version_from_registry();
             let latest_supported = Self::ALL
                 .iter()
                 .copied()
-                .map(|v| (v, v.windows_build()))
-                // Only consider COM interfaces from previous or current build:
-                .filter(|(_, (build, _patch))| *build <= version.dwBuildNumber)
+                .map(|v| (v, v.windows_version()))
+                // Only consider COM interfaces from previous or current Windows version:
+                .filter(|(_, full_ver)| {
+                    *full_ver <= (version.dwBuildNumber, patch_version.unwrap_or(u32::MAX))
+                })
                 // Then find the latest one:
                 .max_by_key(|(_, version)| *version)
                 .map(|(v, _)| v)
                 .unwrap_or_default();
             log_format!(
                 "Using COM interfaces for Windows version: {latest_supported:?} \
-                (Detected Windows version was: {:?}.{:?}.{:?})",
-                version.dwMajorVersion, version.dwMinorVersion, version.dwBuildNumber
+                (Detected Windows version was: {}.{}.{}.{})",
+                version.dwMajorVersion,
+                version.dwMinorVersion,
+                version.dwBuildNumber,
+                match patch_version {
+                    Some(v) => v.to_string(),
+                    None => "N/A".to_owned(),
+                }
             );
             latest_supported
         })
@@ -868,7 +921,7 @@ where
                 }
             };
         }
-        super::with_versions!{get_adaptor}
+        super::with_versions! {get_adaptor}
     }
 }
 #[allow(non_camel_case_types)]
