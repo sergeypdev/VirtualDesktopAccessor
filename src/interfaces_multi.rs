@@ -15,7 +15,6 @@
 //!   - These are actually compiled when the app is executed by the `ComInterfaceAssemblyBuilder.CreateAssembly` method at: [VirtualDesktop/src/VirtualDesktop/Interop/ComInterfaceAssemblyBuilder.cs at 7e37b9848aef681713224dae558d2e51960cf41e · mzomparelli/VirtualDesktop](https://github.com/mzomparelli/VirtualDesktop/blob/7e37b9848aef681713224dae558d2e51960cf41e/src/VirtualDesktop/Interop/ComInterfaceAssemblyBuilder.cs#L84-L153)
 //! - Bindings at [MScholtes/VirtualDesktop at 6de804dced760778450ae3cd1481f8969f75fb39](https://github.com/MScholtes/VirtualDesktop/tree/6de804dced760778450ae3cd1481f8969f75fb39)
 
-
 #![allow(non_upper_case_globals, clippy::upper_case_acronyms)]
 
 use std::ffi::c_void;
@@ -29,7 +28,7 @@ use windows::{
 macro_rules! declare_versions {
     (@inner {
         dollar = {$dollar:tt},
-        versions = {$($version:ident),* $(,)?},
+        versions = {$($version:tt),* $(,)?},
     }) => {
         macro_rules! _with_versions {
             ($dollar macro_callback:path $dollar (, $dollar ( $dollar state:tt )* )?) => {
@@ -44,7 +43,7 @@ macro_rules! declare_versions {
     };
     ($(
         $(#[ $($attr:tt)* ])*
-        mod $version:ident $({ $($code:tt)* })? $(; $(<= $semi:tt)?)?
+        mod $version:tt $({ $($code:tt)* })? $(; $(<= $semi:tt)?)?
     )*) => {
         $(
             $(#[ $($attr)* ])*
@@ -58,7 +57,15 @@ macro_rules! declare_versions {
 }
 declare_versions!(
     mod build_10240;
-    mod build_22000;
+    mod build_16299; // IDD change
+    mod build_17134; // IDD change
+    mod build_19045; // IDD change
+    mod build_20348; // Interface change
+    mod build_22000; // Interface change
+    mod build_22621_2215; // Interface change
+    mod build_22621_3155; // IID change
+    mod build_22631_2428; // IID change
+    mod build_22631_3155;
 );
 mod build_dyn;
 
@@ -125,7 +132,6 @@ macro_rules! _reusable_com_interface {
 }
 // Allow normal imports to work for macro:
 use _reusable_com_interface as reusable_com_interface;
-
 
 /// Type that can be cast into [`ComIn`]
 ///
@@ -236,6 +242,7 @@ type PCWSTR = *const WCHAR;
 type PWSTR = *mut WCHAR;
 type ULONGLONG = u64;
 type LONG = i32;
+type HMONITOR = isize;
 
 type IAsyncCallback = UINT;
 type IImmersiveMonitor = UINT;

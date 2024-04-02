@@ -10,6 +10,14 @@
 //! * Get third desktop name `get_desktop(2).get_name()`
 #![allow(clippy::bool_assert_comparison)]
 
+// Log format macro
+macro_rules! log_format {
+    ($($arg:tt)*) => {
+        #[cfg(debug_assertions)]
+        $crate::log::log_output(&format!($($arg)*));
+    };
+}
+
 mod comobjects;
 mod desktop;
 mod events;

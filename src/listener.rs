@@ -18,14 +18,6 @@ use windows::Win32::System::Threading::{
     GetCurrentThread, SetThreadPriority, THREAD_PRIORITY_TIME_CRITICAL,
 };
 
-// Log format macro
-macro_rules! log_format {
-    ($($arg:tt)*) => {
-        #[cfg(debug_assertions)]
-        $crate::log::log_output(&format!($($arg)*));
-    };
-}
-
 enum DekstopEventThreadMsg {
     Quit,
 }

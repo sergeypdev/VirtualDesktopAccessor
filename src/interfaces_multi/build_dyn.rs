@@ -79,13 +79,22 @@ with_versions!(declare_WindowsVersion);
 //      }
 // }
 impl WindowsVersion {
-    fn windows_build(&self) -> u32 {
-        let (_, ver) = self
+    fn windows_build(&self) -> (u32, u32) {
+        let (_, version) = self
             .as_str()
             .split_once('_')
             .expect("Module name didn't contain an underscore");
-        ver.parse()
-            .expect("Failed to parse module suffix as build version")
+        // We allow omitting the patch version in the module name:
+        let (build, patch) = version.split_once('_').unwrap_or((version, "0"));
+
+        (
+            build
+                .parse()
+                .expect("Failed to parse module suffix as build version"),
+            patch
+                .parse()
+                .expect("Failed to parse module suffix as patch version"),
+        )
     }
     /// Get info about the current Windows version. Only differentiates between
     /// Windows versions that have different virtual desktop interfaces.
@@ -127,18 +136,26 @@ impl WindowsVersion {
             version.dwOSVersionInfoSize = core::mem::size_of_val(&version) as u32;
             let res = unsafe { windows::Wdk::System::SystemServices::RtlGetVersion(&mut version) };
             if res.is_err() {
+                log_format!(
+                    "Failed to get Windows version with error {res:?} using \
+                    COM interfaces for version latest supported version: {:?}",
+                    Self::default()
+                );
                 return Default::default();
             }
-            Self::ALL
+            // FIXME: we don't get the patch version of Windows and just assume the user is on the latest one.
+            let latest_supported = Self::ALL
                 .iter()
                 .copied()
                 .map(|v| (v, v.windows_build()))
                 // Only consider COM interfaces from previous or current build:
-                .filter(|(_, build_ver)| *build_ver <= version.dwBuildNumber)
+                .filter(|(_, (build, _patch))| *build <= version.dwBuildNumber)
                 // Then find the latest one:
-                .max_by_key(|(_, build_ver)| *build_ver)
+                .max_by_key(|(_, version)| *version)
                 .map(|(v, _)| v)
-                .unwrap_or_default()
+                .unwrap_or_default();
+            log_format!("Using COM interfaces for Windows version: {latest_supported:?}");
+            latest_supported
         })
     }
 }
@@ -162,6 +179,8 @@ pub trait WithVersionedTypeCallback<T: ComInterface, R> {
     fn call(self) -> R;
 }
 
+/// Convert a method argument when forwarding a call to a version specific COM
+/// interface.
 pub(crate) trait ForwardArg<T> {
     fn forward(self) -> T;
 }
@@ -171,11 +190,15 @@ impl<T> ForwardArg<T> for T {
     }
 }
 
-/// Generates support code for a COM interface.
-///
-/// Syntax is: `as CreatedEnumName for InterfaceName in $(all)? [version_module_1, version_module_2 $(,)?]`
+/// Generates code to support a COM interface.
 macro_rules! support_interface {
-    (@inner {$dollar:tt} as $state:ident for $name:ident in $(all $(@ $all:tt)?)? [$($version:ident),* $(,)?]) => {
+    (MacroOptions {
+        interface_name: $name:ident,
+        enum_name: $state:ident,
+        all_versions: $(true $(@ $all_versions:tt)?)? $(false)?,
+        versions: [$($version:ident),* $(,)?],
+        dollar: {$dollar:tt} $(,)?
+    }) => {
         $(
             // assert_eq_size from static_assertions crate
             const _: fn() = || {
@@ -196,7 +219,7 @@ macro_rules! support_interface {
                 //   any() => false
                 //   all(any()) => false
                 // And the default macro arm will be hidden.
-                #[cfg(all($(any() $($all)?)?))]
+                #[cfg(all($(any() $($all_versions)?)?))]
                 _ => (),
             }
         };
@@ -344,11 +367,61 @@ macro_rules! support_interface {
         )*
         /// Preform the same action for each version of the wrapped COM interface.
         ///
-        /// Syntax: GeneralType, |versioned: versioned_mod::VersionedType| block_of_code
+        /// Syntax: abstract_value, |versioned: versioned_mod::VersionedType| block_of_code
+        ///
+        /// Alternative syntax (not implemented):
+        /// ```text
+        /// specialized abstract_value,
+        /// $(
+        ///     $([variant, variant...],)?
+        ///     |versioned: versioned_mod::VersionedType| {code_for_variants},
+        /// )*
+        /// else
+        /// |versioned: versioned_mod::VersionedType| code_for_remaining_variants
+        /// ```text
         ///
         /// Note: named the same as the interface to allow for easier usage with macros.
         #[allow(unused_macros)]
         macro_rules! $name {
+            //(specialized
+            //    $dollar this:expr,
+            //    $dollar (
+            //        [$dollar ($dollar special:ident),* $dollar (,)?],
+            //        |$dollar arg:ident
+            //            $dollar (
+            //                :
+            //                $dollar module_name:ident
+            //                ::
+            //                $dollar arg_ty:ident
+            //            )?
+            //        |
+            //        { $dollar ($dollar body:tt)* }
+            //    ),*
+            //    else
+            //    |$dollar arg_else:ident
+            //        $dollar (
+            //            :
+            //            $dollar module_name_else:ident
+            //            ::
+            //            $dollar arg_ty_else:ident
+            //        )?
+            //    |
+            //    $dollar ($dollar body_else:tt)*
+            //) => {{
+            //    match $state::from_typed(&$dollar this) {
+            //        $(
+            //            $state::$version($dollar arg) => {
+            //                $dollar (
+            //                    #[allow(unused_imports)]
+            //                    use self::$version as $dollar module_name;
+            //                    #[allow(unused_imports)]
+            //                    use self::$version::$name as $dollar arg_ty;
+            //                )?
+            //                $dollar ($dollar body)*
+            //            },
+            //        )*
+            //    }
+            //}};
             (
                 $dollar this:expr,
                 |$dollar arg:ident
@@ -374,13 +447,50 @@ macro_rules! support_interface {
                         },
                     )*
                 }
-            }
+            };
         }
     };
-    // Pass an escaped dollar sign to the real macro so that we can construct a
-    // new macro later:
-    (as $state:ident for $name:ident in $($in:tt)*) => {
-        support_interface! { @inner {$} as $state for $name in $($in)* }
+    (MacroOptions {
+        interface_name: $name:ident,
+        enum_name: $state:ident,
+        all_versions: true,
+    }) => {
+        super::with_versions!{
+            support_interface,
+            @callback
+            state = {
+                interface_name: $name,
+                enum_name: $state,
+            },
+        }
+    };
+    // Invoked by `with_versions` macro, allows us to use all module names
+    (@callback
+        state = { $($other_args:tt)* },
+        versions = { $($versions:tt)* },
+    ) => {
+        support_interface! {MacroOptions {
+            $($other_args)*
+            all_versions: true,
+            versions: [$($versions)*],
+            dollar: {$},
+        }}
+    };
+    (MacroOptions {
+        interface_name: $name:ident,
+        enum_name: $state:ident,
+        all_versions: $(true $(@$all_versions:tt)?)? $(false)?,
+        versions: [$($versions:ident),* $(,)?]  $(,)?
+    }) => {
+        // Pass an escaped dollar sign to the real macro so that we can construct a
+        // new macro later:
+        support_interface! {MacroOptions {
+            interface_name: $name,
+            enum_name: $state,
+            all_versions: $(true $all_versions)?,
+            versions: [$($versions,)*],
+            dollar: {$},
+        }}
     };
 }
 
@@ -414,6 +524,52 @@ macro_rules! forward_call {
             }
         }
     );
+    // No function body => forward the call automatically (sometimes not
+    // implemented for the versioned interface):
+    (@item
+        #[forward_for = $name:ident]
+        #[optional_method]
+        $( #[$attr:meta] )*
+        $pub:vis
+        $(unsafe $(@ $unsafe:tt)?)?
+        fn $fname:ident (
+            &$self_:ident $(,)? $( $arg_name:ident : $ArgTy:ty ),* $(,)?
+        ) -> $RetTy:ty;
+    ) => {
+        $( #[$attr] )*
+        #[allow(unused_parens, unused_unsafe)]
+        $pub
+        $(unsafe $($unsafe)?)?
+        fn $fname (
+            &$self_, $( $arg_name : $ArgTy ),*
+        ) -> $RetTy
+        {
+            /// Trait implementation has lower priority than inherent
+            /// implementation, see:
+            /// <https://github.com/rust-lang/rust/issues/26007>
+            trait __FallbackNotImpl {
+                fn $fname(
+                    &$self_, $( _: $ArgTy ),*
+                ) -> $RetTy;
+            }
+            impl<T> __FallbackNotImpl for T {
+                fn $fname(
+                    &$self_, $( _: $ArgTy ),*
+                ) -> $RetTy {
+                    E_NOTIMPL
+                }
+            }
+
+            unsafe {
+                $name!(
+                    $self_,
+                    |v| (*v).$fname( $(
+                        ForwardArg::forward($arg_name)
+                    ),*)
+                )
+            }
+        }
+    };
     // No function body => forward the call automatically:
     (@item
         #[forward_for = $name:ident]
@@ -494,11 +650,15 @@ macro_rules! forward_call {
     };
 }
 
-support_interface!(as IApplicationViewInner for IApplicationView in all [build_10240, build_22000]);
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct IApplicationView(IUnknown);
+support_interface!(MacroOptions {
+    interface_name: IApplicationView,
+    enum_name: IApplicationViewEnum,
+    all_versions: true,
+});
+
 #[apply(forward_call)]
 impl IApplicationView {
     /* IInspecateble */
@@ -507,10 +667,7 @@ impl IApplicationView {
         out_iid_count: *mut ULONG,
         out_opt_iid_array_ptr: *mut *mut GUID,
     ) -> HRESULT;
-    pub unsafe fn get_runtime_class_name(
-        &self,
-        out_opt_class_name: *mut HSTRING,
-    ) -> HRESULT;
+    pub unsafe fn get_runtime_class_name(&self, out_opt_class_name: *mut HSTRING) -> HRESULT;
     pub unsafe fn get_trust_level(&self, ptr_trust_level: LPVOID) -> HRESULT;
 
     /* IApplicationView methods */
@@ -531,28 +688,19 @@ impl IApplicationView {
         unknowniid: *const GUID,
         unknown_array_ptr: LPVOID,
     ) -> HRESULT;
-    pub unsafe fn set_position(
-        &self,
-        view_position: *mut IApplicationViewPosition,
-    ) -> HRESULT;
+    pub unsafe fn set_position(&self, view_position: *mut IApplicationViewPosition) -> HRESULT;
     pub unsafe fn insert_after_window(&self, window: HWND) -> HRESULT;
     pub unsafe fn get_extended_frame_position(&self, rect: *mut RECT) -> HRESULT;
     pub unsafe fn get_app_user_model_id(&self, id: *mut PWSTR) -> HRESULT; // Proc17
     pub unsafe fn set_app_user_model_id(&self, id: PCWSTR) -> HRESULT;
-    pub unsafe fn is_equal_by_app_user_model_id(
-        &self,
-        id: PCWSTR,
-        out_result: *mut INT,
-    ) -> HRESULT;
+    pub unsafe fn is_equal_by_app_user_model_id(&self, id: PCWSTR, out_result: *mut INT)
+        -> HRESULT;
 
     /*** IApplicationView methods ***/
     pub unsafe fn get_view_state(&self, out_state: *mut UINT) -> HRESULT; // Proc20
     pub unsafe fn set_view_state(&self, state: UINT) -> HRESULT; // Proc21
     pub unsafe fn get_neediness(&self, out_neediness: *mut INT) -> HRESULT; // Proc22
-    pub unsafe fn get_last_activation_timestamp(
-        &self,
-        out_timestamp: *mut ULONGLONG,
-    ) -> HRESULT;
+    pub unsafe fn get_last_activation_timestamp(&self, out_timestamp: *mut ULONGLONG) -> HRESULT;
     pub unsafe fn set_last_activation_timestamp(&self, timestamp: ULONGLONG) -> HRESULT;
     pub unsafe fn get_virtual_desktop_id(&self, out_desktop_guid: *mut GUID) -> HRESULT;
     pub unsafe fn set_virtual_desktop_id(&self, desktop_guid: *const GUID) -> HRESULT;
@@ -567,14 +715,6 @@ impl IApplicationView {
     pub unsafe fn set_compatibility_policy_type(
         &self,
         policy_type: APPLICATION_VIEW_COMPATIBILITY_POLICY,
-    ) -> HRESULT;
-    pub unsafe fn get_position_priority(
-        &self,
-        out_priority: *mut IShellPositionerPriority,
-    ) -> HRESULT;
-    pub unsafe fn set_position_priority(
-        &self,
-        priority: IShellPositionerPriority,
     ) -> HRESULT;
 
     pub unsafe fn get_size_constraints(
@@ -596,20 +736,13 @@ impl IApplicationView {
         size2: *const SIZE,
     ) -> HRESULT;
 
-    pub unsafe fn query_size_constraints_from_app(&self) -> HRESULT;
     pub unsafe fn on_min_size_preferences_updated(&self, window: HWND) -> HRESULT;
-    pub unsafe fn apply_operation(
-        &self,
-        operation: *mut IApplicationViewOperation,
-    ) -> HRESULT;
+    pub unsafe fn apply_operation(&self, operation: *mut IApplicationViewOperation) -> HRESULT;
     pub unsafe fn is_tray(&self, out_is: *mut BOOL) -> HRESULT;
     pub unsafe fn is_in_high_zorder_band(&self, out_is: *mut BOOL) -> HRESULT;
     pub unsafe fn is_splash_screen_presented(&self, out_is: *mut BOOL) -> HRESULT;
     pub unsafe fn flash(&self) -> HRESULT;
-    pub unsafe fn get_root_switchable_owner(
-        &self,
-        app_view: *mut IApplicationView,
-    ) -> HRESULT; // proc45
+    pub unsafe fn get_root_switchable_owner(&self, app_view: *mut IApplicationView) -> HRESULT; // proc45
     pub unsafe fn enumerate_ownership_tree(&self, objects: *mut IObjectArray) -> HRESULT; // proc46
 
     pub unsafe fn get_enterprise_id(&self, out_id: *mut PWSTR) -> HRESULT; // proc47
@@ -629,11 +762,15 @@ impl IApplicationView {
     pub unsafe fn unknown12(&self, arg: *mut SIZE) -> HRESULT;
 }
 
-support_interface!(as IVirtualDesktopInner for IVirtualDesktop in [build_10240, build_22000]);
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct IVirtualDesktop(IUnknown);
+support_interface!(MacroOptions {
+    interface_name: IVirtualDesktop,
+    enum_name: IVirtualDesktopInner,
+    all_versions: true,
+});
+
 #[apply(forward_call)]
 impl IVirtualDesktop {
     pub unsafe fn is_view_visible(
@@ -642,26 +779,21 @@ impl IVirtualDesktop {
         out_bool: *mut u32,
     ) -> HRESULT;
     pub unsafe fn get_id(&self, out_guid: *mut GUID) -> HRESULT;
-
-    pub unsafe fn get_name(&self, out_string: *mut HSTRING) -> HRESULT {
-        match IVirtualDesktopInner::from_typed(self) {
-            IVirtualDesktopInner::build_10240(_) => E_NOTIMPL,
-            IVirtualDesktopInner::build_22000(this) => unsafe { this.get_name(out_string) },
-        }
-    }
-    pub unsafe fn get_wallpaper(&self, out_string: *mut HSTRING) -> HRESULT {
-        match IVirtualDesktopInner::from_typed(self) {
-            IVirtualDesktopInner::build_10240(_) => E_NOTIMPL,
-            IVirtualDesktopInner::build_22000(this) => unsafe { this.get_wallpaper(out_string) },
-        }
-    }
+    #[optional_method]
+    pub unsafe fn get_name(&self, out_string: *mut HSTRING) -> HRESULT;
+    #[optional_method]
+    pub unsafe fn get_wallpaper(&self, out_string: *mut HSTRING) -> HRESULT;
 }
-
-support_interface!(as IApplicationViewCollectionInner for IApplicationViewCollection in all [build_10240, build_22000]);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct IApplicationViewCollection(IUnknown);
+support_interface!(MacroOptions {
+    interface_name: IApplicationViewCollection,
+    enum_name: IApplicationViewCollectionInner,
+    all_versions: true,
+});
+
 #[apply(forward_call)]
 impl IApplicationViewCollection {
     pub unsafe fn get_views(&self, out_views: *mut IObjectArray) -> HRESULT;
@@ -678,48 +810,35 @@ impl IApplicationViewCollection {
         &self,
         window: HWND,
         out_view: *mut Option<IApplicationView>,
-    ) -> HRESULT {
-        IApplicationViewCollection!(self, |inner| inner
-            .get_view_for_hwnd(window, out_view as *mut _))
-    }
+    ) -> HRESULT;
 
     pub unsafe fn get_view_for_application(
         &self,
         app: IImmersiveApplication,
         out_view: *mut IApplicationView,
-    ) -> HRESULT {
-        IApplicationViewCollection!(self, |inner| inner
-            .get_view_for_application(app, out_view as *mut _))
-    }
+    ) -> HRESULT;
 
     pub unsafe fn get_view_for_app_user_model_id(
         &self,
         id: PCWSTR,
         out_view: *mut IApplicationView,
-    ) -> HRESULT {
-        IApplicationViewCollection!(self, |inner| inner
-            .get_view_for_app_user_model_id(id, out_view as *mut _))
-    }
+    ) -> HRESULT;
 
-    pub unsafe fn get_view_in_focus(&self, out_view: &mut Option<IApplicationView>) -> HRESULT {
-        unsafe {
-            IApplicationViewCollection!(self, |inner| inner
-                .get_view_in_focus(out_view as *mut Option<_> as *mut _))
-        }
-    }
+    pub unsafe fn get_view_in_focus(&self, out_view: *mut IApplicationView) -> HRESULT;
+
+    #[optional_method]
+    pub unsafe fn try_get_last_active_visible_view(
+        &self,
+        out_view: *mut IApplicationView,
+    ) -> HRESULT;
 
     pub unsafe fn refresh_collection(&self) -> HRESULT;
 
     pub unsafe fn register_for_application_view_changes(
         &self,
         listener: IApplicationViewChangeListener,
-        out_id: &mut DWORD,
-    ) -> HRESULT {
-        unsafe {
-            IApplicationViewCollection!(self, |inner| inner
-                .register_for_application_view_changes(listener, out_id))
-        }
-    }
+        out_id: *mut DWORD,
+    ) -> HRESULT;
 
     pub unsafe fn unregister_for_application_view_changes(&self, id: DWORD) -> HRESULT;
 }
@@ -740,26 +859,32 @@ impl IApplicationViewCollection {
     }
 }
 
-support_interface!(as IVirtualDesktopNotificationInner for IVirtualDesktopNotification in all [build_10240, build_22000]);
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct IVirtualDesktopNotification(IUnknown);
+support_interface!(MacroOptions {
+    interface_name: IVirtualDesktopNotification,
+    enum_name: IVirtualDesktopNotificationInner,
+    all_versions: true,
+});
+
 impl<T> From<T> for IVirtualDesktopNotification
 where
     T: IVirtualDesktopNotification_Impl,
 {
     fn from(value: T) -> Self {
-        match WindowsVersion::get() {
-            WindowsVersion::build_10240 => build_10240::IVirtualDesktopNotification::from(
-                build_10240::VirtualDesktopNotificationAdaptor { inner: value },
-            )
-            .into(),
-            WindowsVersion::build_22000 => build_22000::IVirtualDesktopNotification::from(
-                build_22000::VirtualDesktopNotificationAdaptor { inner: value },
-            )
-            .into(),
+        macro_rules! get_adaptor {
+            (versions = {$($version:ident,)*},) => {
+                match WindowsVersion::get() {
+                    $(
+                        WindowsVersion::$version => $version::IVirtualDesktopNotification::from(
+                            $version::VirtualDesktopNotificationAdaptor { inner: value },
+                        ).into(),
+                    )*
+                }
+            };
         }
+        super::with_versions!{get_adaptor}
     }
 }
 #[allow(non_camel_case_types)]
@@ -816,19 +941,23 @@ pub trait IVirtualDesktopNotification_Impl {
     unsafe fn remote_virtual_desktop_connected(&self, desktop: ComIn<IVirtualDesktop>) -> HRESULT;
 }
 
-support_interface!(as IVirtualDesktopNotificationServiceInner for IVirtualDesktopNotificationService in all [build_10240, build_22000]);
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct IVirtualDesktopNotificationService(IUnknown);
+support_interface!(MacroOptions {
+    interface_name: IVirtualDesktopNotificationService,
+    enum_name: IVirtualDesktopNotificationServiceInner,
+    all_versions: true,
+});
 
 #[apply(forward_call)]
 impl IVirtualDesktopNotificationService {
     pub unsafe fn register(
         &self,
-        notification: *mut std::ffi::c_void,
+        notification: *mut std::ffi::c_void, // *const IVirtualDesktopNotification,
         out_cookie: *mut DWORD,
     ) -> HRESULT;
+
     pub unsafe fn unregister(&self, cookie: u32) -> HRESULT;
 }
 impl IVirtualDesktopNotificationService {
@@ -848,14 +977,41 @@ impl IVirtualDesktopNotificationService {
     }
 }
 
-support_interface!(as IVirtualDesktopManagerInternalInner for IVirtualDesktopManagerInternal in all [build_10240, build_22000]);
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct IVirtualDesktopManagerInternal(IUnknown);
+support_interface!(MacroOptions {
+    interface_name: IVirtualDesktopManagerInternal,
+    enum_name: IVirtualDesktopManagerInternalInner,
+    all_versions: true,
+});
+
 #[apply(forward_call)]
 impl IVirtualDesktopManagerInternal {
-    pub unsafe fn get_desktop_count(&self, out_count: *mut UINT) -> HRESULT;
+    pub unsafe fn get_desktop_count(&self, out_count: *mut UINT) -> HRESULT {
+        struct Specialize<T>(T);
+        impl Specialize<&build_20348::IVirtualDesktopManagerInternal> {
+            unsafe fn get_desktop_count(&self, out_count: *mut UINT) -> HRESULT {
+                self.0.get_desktop_count(0, out_count)
+            }
+        }
+        impl Specialize<&build_22000::IVirtualDesktopManagerInternal> {
+            unsafe fn get_desktop_count(&self, out_count: *mut UINT) -> HRESULT {
+                self.0.get_desktop_count(0, out_count)
+            }
+        }
+        // The compiler prefers inherit methods and only derefs if no such
+        // method can be found.
+        impl<T> core::ops::Deref for Specialize<T> {
+            type Target = T;
+            fn deref(&self) -> &T {
+                &self.0
+            }
+        }
+        IVirtualDesktopManagerInternal!(self, |this: version::Versioned| {
+            Specialize(&*this).get_desktop_count(out_count)
+        })
+    }
 
     pub unsafe fn move_view_to_desktop(
         &self,
@@ -867,16 +1023,57 @@ impl IVirtualDesktopManagerInternal {
         &self,
         view: ComIn<IApplicationView>,
         can_move: *mut i32,
-    ) -> HRESULT {
-        unsafe {
-            IVirtualDesktopManagerInternal!(self, |i| i
-                .can_move_view_between_desktops(view.into(), can_move))
+    ) -> HRESULT;
+
+    pub unsafe fn get_current_desktop(&self, out_desktop: *mut Option<IVirtualDesktop>) -> HRESULT {
+        struct Specialize<T>(T);
+        impl Specialize<&build_20348::IVirtualDesktopManagerInternal> {
+            unsafe fn get_current_desktop(&self, out_desktop: *mut Option<IVirtualDesktop>) -> HRESULT {
+                self.0.get_current_desktop(0, out_desktop.forward())
+            }
         }
+        impl Specialize<&build_22000::IVirtualDesktopManagerInternal> {
+            unsafe fn get_current_desktop(&self, out_desktop: *mut Option<IVirtualDesktop>) -> HRESULT {
+                self.0.get_current_desktop(0, out_desktop.forward())
+            }
+        }
+        // The compiler prefers inherit methods and only derefs if no such
+        // method can be found.
+        impl<T> core::ops::Deref for Specialize<T> {
+            type Target = T;
+            fn deref(&self) -> &T {
+                &self.0
+            }
+        }
+        IVirtualDesktopManagerInternal!(self, |this: version::Versioned| {
+            Specialize(&*this).get_current_desktop(out_desktop.forward())
+        })
     }
 
-    pub unsafe fn get_current_desktop(&self, out_desktop: *mut Option<IVirtualDesktop>) -> HRESULT;
-
-    pub unsafe fn get_desktops(&self, out_desktops: *mut Option<IObjectArray>) -> HRESULT;
+    pub unsafe fn get_desktops(&self, out_desktops: *mut Option<IObjectArray>) -> HRESULT {
+        struct Specialize<T>(T);
+        impl Specialize<&build_20348::IVirtualDesktopManagerInternal> {
+            unsafe fn get_desktops(&self, out_desktops: *mut Option<IObjectArray>) -> HRESULT {
+                self.0.get_desktops(0, out_desktops)
+            }
+        }
+        impl Specialize<&build_22000::IVirtualDesktopManagerInternal> {
+            unsafe fn get_desktops(&self, out_desktops: *mut Option<IObjectArray>) -> HRESULT {
+                self.0.get_desktops(0, out_desktops)
+            }
+        }
+        // The compiler prefers inherit methods and only derefs if no such
+        // method can be found.
+        impl<T> core::ops::Deref for Specialize<T> {
+            type Target = T;
+            fn deref(&self) -> &T {
+                &self.0
+            }
+        }
+        IVirtualDesktopManagerInternal!(self, |this: version::Versioned| {
+            Specialize(&*this).get_desktops(out_desktops)
+        })
+    }
 
     /// Get next or previous desktop
     ///
@@ -890,17 +1087,86 @@ impl IVirtualDesktopManagerInternal {
         out_pp_desktop: *mut Option<IVirtualDesktop>,
     ) -> HRESULT;
 
-    pub unsafe fn switch_desktop(&self, desktop: ComIn<IVirtualDesktop>) -> HRESULT;
-
-    pub unsafe fn create_desktop(&self, out_desktop: *mut Option<IVirtualDesktop>) -> HRESULT;
-
-    pub unsafe fn move_desktop(&self, in_desktop: ComIn<IVirtualDesktop>, index: UINT) -> HRESULT {
-        match IVirtualDesktopManagerInternalInner::from_typed(self) {
-            IVirtualDesktopManagerInternalInner::build_10240(_) => E_NOTIMPL,
-            IVirtualDesktopManagerInternalInner::build_22000(v) => {
-                v.move_desktop(in_desktop.into(), index)
+    pub unsafe fn switch_desktop(&self, desktop: ComIn<IVirtualDesktop>) -> HRESULT {
+        struct Specialize<T>(T);
+        impl Specialize<&build_20348::IVirtualDesktopManagerInternal> {
+            unsafe fn switch_desktop(&self, desktop: ComIn<IVirtualDesktop>) -> HRESULT {
+                self.0.switch_desktop(0, desktop.forward())
             }
         }
+        impl Specialize<&build_22000::IVirtualDesktopManagerInternal> {
+            unsafe fn switch_desktop(&self, desktop: ComIn<IVirtualDesktop>) -> HRESULT {
+                self.0.switch_desktop(0, desktop.forward())
+            }
+        }
+        // The compiler prefers inherit methods and only derefs if no such
+        // method can be found.
+        impl<T> core::ops::Deref for Specialize<T> {
+            type Target = T;
+            fn deref(&self) -> &T {
+                &self.0
+            }
+        }
+        IVirtualDesktopManagerInternal!(self, |this: version::Versioned| {
+            Specialize(&*this).switch_desktop(desktop.forward())
+        })
+    }
+
+    pub unsafe fn create_desktop(&self, out_desktop: *mut Option<IVirtualDesktop>) -> HRESULT {
+        struct Specialize<T>(T);
+        impl Specialize<&build_20348::IVirtualDesktopManagerInternal> {
+            unsafe fn create_desktop(&self, out_desktop: *mut Option<IVirtualDesktop>) -> HRESULT {
+                self.0.create_desktop(0, out_desktop.forward())
+            }
+        }
+        impl Specialize<&build_22000::IVirtualDesktopManagerInternal> {
+            unsafe fn create_desktop(&self, out_desktop: *mut Option<IVirtualDesktop>) -> HRESULT {
+                self.0.create_desktop(0, out_desktop.forward())
+            }
+        }
+        // The compiler prefers inherit methods and only derefs if no such
+        // method can be found.
+        impl<T> core::ops::Deref for Specialize<T> {
+            type Target = T;
+            fn deref(&self) -> &T {
+                &self.0
+            }
+        }
+        IVirtualDesktopManagerInternal!(self, |this: version::Versioned| {
+            Specialize(&*this).create_desktop(out_desktop.forward())
+        })
+    }
+
+    pub unsafe fn move_desktop(&self, in_desktop: ComIn<IVirtualDesktop>, index: UINT) -> HRESULT {
+        struct Specialize<T>(T);
+        impl Specialize<&build_22000::IVirtualDesktopManagerInternal> {
+            unsafe fn move_desktop(&self, in_desktop: ComIn<IVirtualDesktop>, index: UINT) -> HRESULT {
+                self.0.move_desktop(in_desktop.forward(), 0, index)
+            }
+        }
+        // The compiler prefers inherit methods and only derefs if no such
+        // method can be found.
+        impl<T> core::ops::Deref for Specialize<T> {
+            type Target = T;
+            fn deref(&self) -> &T {
+                &self.0
+            }
+        }
+
+        trait __FallbackNotImpl {
+            unsafe fn move_desktop(&self, in_desktop: ComIn<IVirtualDesktop>, index: UINT) -> HRESULT;
+        }
+
+        IVirtualDesktopManagerInternal!(self, |this: version::Versioned| {
+            // Only uses trait methods if there aren't any inherent methods
+            impl __FallbackNotImpl for Versioned {
+                unsafe fn move_desktop(&self, _: ComIn<IVirtualDesktop>, _: UINT) -> HRESULT {
+                    E_NOTIMPL
+                }
+            }
+
+            Specialize(&*this).move_desktop(in_desktop.forward(), index)
+        })
     }
 
     pub unsafe fn remove_desktop(
@@ -913,55 +1179,22 @@ impl IVirtualDesktopManagerInternal {
         &self,
         guid: *const GUID,
         out_desktop: *mut Option<IVirtualDesktop>,
-    ) -> HRESULT {
-        unsafe {
-            IVirtualDesktopManagerInternal!(self, |inner| {
-                inner.find_desktop(guid, out_desktop.forward())
-            })
-        }
-    }
+    ) -> HRESULT;
 
+    #[optional_method]
     pub unsafe fn get_desktop_switch_include_exclude_views(
         &self,
         desktop: ComIn<IVirtualDesktop>,
         out_pp_desktops1: *mut IObjectArray,
         out_pp_desktops2: *mut IObjectArray,
-    ) -> HRESULT {
-        match IVirtualDesktopManagerInternalInner::from_typed(self) {
-            IVirtualDesktopManagerInternalInner::build_10240(_) => E_NOTIMPL,
-            IVirtualDesktopManagerInternalInner::build_22000(inner) => inner
-                .get_desktop_switch_include_exclude_views(
-                    desktop.forward(),
-                    out_pp_desktops1,
-                    out_pp_desktops2,
-                ),
-        }
-    }
+    ) -> HRESULT;
 
-    pub unsafe fn set_name(&self, desktop: ComIn<IVirtualDesktop>, name: HSTRING) -> HRESULT {
-        match IVirtualDesktopManagerInternalInner::from_typed(self) {
-            IVirtualDesktopManagerInternalInner::build_10240(_) => E_NOTIMPL,
-            IVirtualDesktopManagerInternalInner::build_22000(inner) => {
-                inner.set_name(desktop.forward(), name)
-            }
-        }
-    }
-    pub unsafe fn set_wallpaper(&self, desktop: ComIn<IVirtualDesktop>, name: HSTRING) -> HRESULT {
-        match IVirtualDesktopManagerInternalInner::from_typed(self) {
-            IVirtualDesktopManagerInternalInner::build_10240(_) => E_NOTIMPL,
-            IVirtualDesktopManagerInternalInner::build_22000(inner) => {
-                inner.set_wallpaper(desktop.forward(), name)
-            }
-        }
-    }
-    pub unsafe fn update_wallpaper_for_all(&self, name: HSTRING) -> HRESULT {
-        match IVirtualDesktopManagerInternalInner::from_typed(self) {
-            IVirtualDesktopManagerInternalInner::build_10240(_) => E_NOTIMPL,
-            IVirtualDesktopManagerInternalInner::build_22000(inner) => {
-                inner.update_wallpaper_for_all(name)
-            }
-        }
-    }
+    #[optional_method]
+    pub unsafe fn set_name(&self, desktop: ComIn<IVirtualDesktop>, name: HSTRING) -> HRESULT;
+    #[optional_method]
+    pub unsafe fn set_wallpaper(&self, desktop: ComIn<IVirtualDesktop>, name: HSTRING) -> HRESULT;
+    #[optional_method]
+    pub unsafe fn update_wallpaper_for_all(&self, name: HSTRING) -> HRESULT;
 }
 impl IVirtualDesktopManagerInternal {
     pub unsafe fn query_service(provider: &IServiceProvider) -> crate::Result<Self> {
@@ -980,11 +1213,14 @@ impl IVirtualDesktopManagerInternal {
     }
 }
 
-support_interface!(as IVirtualDesktopPinnedAppsInner for IVirtualDesktopPinnedApps in all [build_10240, build_22000]);
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct IVirtualDesktopPinnedApps(IUnknown);
+support_interface!(MacroOptions {
+    interface_name: IVirtualDesktopPinnedApps,
+    enum_name: IVirtualDesktopPinnedAppsInner,
+    all_versions: true,
+});
 
 #[apply(forward_call)]
 impl IVirtualDesktopPinnedApps {
@@ -996,11 +1232,7 @@ impl IVirtualDesktopPinnedApps {
         &self,
         view: ComIn<IApplicationView>,
         out_iss: *mut bool,
-    ) -> HRESULT {
-        unsafe {
-            IVirtualDesktopPinnedApps!(self, |inner| inner.is_view_pinned(view.into(), out_iss))
-        }
-    }
+    ) -> HRESULT;
     pub unsafe fn pin_view(&self, view: ComIn<IApplicationView>) -> HRESULT;
     pub unsafe fn unpin_view(&self, view: ComIn<IApplicationView>) -> HRESULT;
 }

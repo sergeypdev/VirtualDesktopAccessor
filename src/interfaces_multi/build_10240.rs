@@ -1,12 +1,13 @@
 //! Support for Windows 10.
 //!
-//! These definitions should be valid from Windows version `10240` (inclusive) to `22000` (exclusive).
+//! The [`IVirtualDesktopNotification`] and [`IVirtualDesktopManagerInternal`]
+//! interfaces do not take "monitor" arguments.
 use super::*;
 
 reusable_com_interface!(
     MacroOptions {
         temp_macro_name: _IApplicationView,
-        iid: "871F602A-2B58-42B4-8C4B-6C43D642C06F",
+        iid: "9AC0B5C8-1484-4C5B-9533-4134A0F97CEA",
     },
     {
         pub unsafe trait IApplicationView: IUnknown {
@@ -143,7 +144,7 @@ reusable_com_interface!(
 reusable_com_interface!(
     MacroOptions {
         temp_macro_name: _IApplicationViewCollection,
-        iid: "1841C6D7-4F9D-42C0-AF41-8747538F10E5",
+        iid: "2C08ADF0-A386-4B35-9250-0FE183476FCC",
     },
     {
         pub unsafe trait IApplicationViewCollection: IUnknown {
@@ -209,6 +210,68 @@ reusable_com_interface!(
                 out_bool: *mut u32,
             ) -> HRESULT;
             pub unsafe fn get_id(&self, out_guid: *mut GUID) -> HRESULT;
+        }
+    }
+);
+
+reusable_com_interface!(
+    MacroOptions {
+        temp_macro_name: _IVirtualDesktopManagerInternal,
+        iid: "F31574D6-B682-4CDC-BD56-1827860ABEC6",
+    },
+    {
+        pub unsafe trait IVirtualDesktopManagerInternal: IUnknown {
+            pub unsafe fn get_desktop_count(&self, out_count: *mut UINT) -> HRESULT;
+
+            pub unsafe fn move_view_to_desktop(
+                &self,
+                view: ComIn<IApplicationView>,
+                desktop: ComIn<IVirtualDesktop>,
+            ) -> HRESULT;
+
+            pub unsafe fn can_move_view_between_desktops(
+                &self,
+                view: ComIn<IApplicationView>,
+                can_move: *mut i32,
+            ) -> HRESULT;
+
+            pub unsafe fn get_current_desktop(
+                &self,
+                out_desktop: *mut Option<IVirtualDesktop>,
+            ) -> HRESULT;
+
+            pub unsafe fn get_desktops(&self, out_desktops: *mut Option<IObjectArray>) -> HRESULT;
+
+            /// Get next or previous desktop
+            ///
+            /// Direction values:
+            /// 3 = Left direction
+            /// 4 = Right direction
+            pub unsafe fn get_adjacent_desktop(
+                &self,
+                in_desktop: ComIn<IVirtualDesktop>,
+                direction: UINT,
+                out_pp_desktop: *mut Option<IVirtualDesktop>,
+            ) -> HRESULT;
+
+            pub unsafe fn switch_desktop(&self, desktop: ComIn<IVirtualDesktop>) -> HRESULT;
+
+            pub unsafe fn create_desktop(
+                &self,
+                out_desktop: *mut Option<IVirtualDesktop>,
+            ) -> HRESULT;
+
+            pub unsafe fn remove_desktop(
+                &self,
+                destroy_desktop: ComIn<IVirtualDesktop>,
+                fallback_desktop: ComIn<IVirtualDesktop>,
+            ) -> HRESULT;
+
+            pub unsafe fn find_desktop(
+                &self,
+                guid: *const GUID,
+                out_desktop: *mut Option<IVirtualDesktop>,
+            ) -> HRESULT;
         }
     }
 );
@@ -308,10 +371,8 @@ reusable_com_interface!(
                 desktop_destroyed: ComIn<IVirtualDesktop>,
                 desktop_fallback: ComIn<IVirtualDesktop>,
             ) -> HRESULT {
-                self.inner.virtual_desktop_destroyed(
-                    desktop_destroyed.into(),
-                    desktop_fallback.into(),
-                )
+                self.inner
+                    .virtual_desktop_destroyed(desktop_destroyed.into(), desktop_fallback.into())
             }
 
             unsafe fn view_virtual_desktop_changed(
@@ -338,68 +399,6 @@ reusable_com_interface!(
             ) -> HRESULT;
 
             pub unsafe fn unregister(&self, cookie: u32) -> HRESULT;
-        }
-    }
-);
-
-reusable_com_interface!(
-    MacroOptions {
-        temp_macro_name: _IVirtualDesktopManagerInternal,
-        iid: "0F3A72B0-4566-487E-9A33-4ED302F6D6CE",
-    },
-    {
-        pub unsafe trait IVirtualDesktopManagerInternal: IUnknown {
-            pub unsafe fn get_desktop_count(&self, out_count: *mut UINT) -> HRESULT;
-
-            pub unsafe fn move_view_to_desktop(
-                &self,
-                view: ComIn<IApplicationView>,
-                desktop: ComIn<IVirtualDesktop>,
-            ) -> HRESULT;
-
-            pub unsafe fn can_move_view_between_desktops(
-                &self,
-                view: ComIn<IApplicationView>,
-                can_move: *mut i32,
-            ) -> HRESULT;
-
-            pub unsafe fn get_current_desktop(
-                &self,
-                out_desktop: *mut Option<IVirtualDesktop>,
-            ) -> HRESULT;
-
-            pub unsafe fn get_desktops(&self, out_desktops: *mut Option<IObjectArray>) -> HRESULT;
-
-            /// Get next or previous desktop
-            ///
-            /// Direction values:
-            /// 3 = Left direction
-            /// 4 = Right direction
-            pub unsafe fn get_adjacent_desktop(
-                &self,
-                in_desktop: ComIn<IVirtualDesktop>,
-                direction: UINT,
-                out_pp_desktop: *mut Option<IVirtualDesktop>,
-            ) -> HRESULT;
-
-            pub unsafe fn switch_desktop(&self, desktop: ComIn<IVirtualDesktop>) -> HRESULT;
-
-            pub unsafe fn create_desktop(
-                &self,
-                out_desktop: *mut Option<IVirtualDesktop>,
-            ) -> HRESULT;
-
-            pub unsafe fn remove_desktop(
-                &self,
-                destroy_desktop: ComIn<IVirtualDesktop>,
-                fallback_desktop: ComIn<IVirtualDesktop>,
-            ) -> HRESULT;
-
-            pub unsafe fn find_desktop(
-                &self,
-                guid: *const GUID,
-                out_desktop: *mut Option<IVirtualDesktop>,
-            ) -> HRESULT;
         }
     }
 );

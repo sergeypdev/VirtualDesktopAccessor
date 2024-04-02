@@ -1,7 +1,6 @@
-//! New for this version is that the [`IVirtualDesktopNotification`] interface
-//! takes "monitors" as arguments, previously only the
-//! [`IVirtualDesktopManagerInternal`] interface used them.
-
+//! New for this version is that the [`IVirtualDesktopManagerInternal`]
+//! interfaces take "monitor" arguments, note that the The
+//! [`IVirtualDesktopNotification`] interface still doesn't use monitors.
 use super::*;
 use build_10240 as prev_build;
 
@@ -16,7 +15,7 @@ prev_build::IVirtualDesktopPinnedApps!("4CE81583-1E4C-4632-A621-07A53543148F");
 reusable_com_interface!(
     MacroOptions {
         temp_macro_name: _IVirtualDesktop,
-        iid: "536D3495-B208-4CC9-AE26-DE8111275BF8",
+        iid: "62FDF88B-11CA-4AFB-8BD8-2296DFAE49E2",
     },
     {
         pub unsafe trait IVirtualDesktop: IUnknown {
@@ -26,10 +25,15 @@ reusable_com_interface!(
                 out_bool: *mut u32,
             ) -> HRESULT;
             pub unsafe fn get_id(&self, out_guid: *mut GUID) -> HRESULT;
-            pub unsafe fn get_monitor(&self, out_monitor: *mut HMONITOR) -> HRESULT;
+
+            // These methods are new:
+
+            pub unsafe fn get_monitor(
+                &self,
+                monitor: HMONITOR,
+                out_monitor: *mut HMONITOR,
+            ) -> HRESULT;
             pub unsafe fn get_name(&self, out_string: *mut HSTRING) -> HRESULT;
-            // This method is new:
-            pub unsafe fn get_wallpaper(&self, out_string: *mut HSTRING) -> HRESULT;
         }
     }
 );
@@ -37,7 +41,7 @@ reusable_com_interface!(
 reusable_com_interface!(
     MacroOptions {
         temp_macro_name: _IVirtualDesktopManagerInternal,
-        iid: "B2F925B9-5A0F-4D2E-9F4D-2B1507593C10",
+        iid: "094AFE11-44F2-4BA0-976F-29A97E263EE0",
     },
     {
         pub unsafe trait IVirtualDesktopManagerInternal: IUnknown {
@@ -63,11 +67,6 @@ reusable_com_interface!(
                 &self,
                 monitor: HMONITOR,
                 out_desktop: *mut Option<IVirtualDesktop>,
-            ) -> HRESULT;
-
-            pub unsafe fn get_all_current_desktops(
-                &self,
-                out_desktops: *mut Option<IObjectArray>,
             ) -> HRESULT;
 
             pub unsafe fn get_desktops(
@@ -100,13 +99,6 @@ reusable_com_interface!(
                 out_desktop: *mut Option<IVirtualDesktop>,
             ) -> HRESULT;
 
-            pub unsafe fn move_desktop(
-                &self,
-                in_desktop: ComIn<IVirtualDesktop>,
-                monitor: HMONITOR,
-                index: UINT,
-            ) -> HRESULT;
-
             pub unsafe fn remove_desktop(
                 &self,
                 destroy_desktop: ComIn<IVirtualDesktop>,
@@ -118,6 +110,8 @@ reusable_com_interface!(
                 guid: *const GUID,
                 out_desktop: *mut Option<IVirtualDesktop>,
             ) -> HRESULT;
+
+            // These methods are new:
 
             pub unsafe fn get_desktop_switch_include_exclude_views(
                 &self,
@@ -131,12 +125,6 @@ reusable_com_interface!(
                 desktop: ComIn<IVirtualDesktop>,
                 name: HSTRING,
             ) -> HRESULT;
-            pub unsafe fn set_wallpaper(
-                &self,
-                desktop: ComIn<IVirtualDesktop>,
-                name: HSTRING,
-            ) -> HRESULT;
-            pub unsafe fn update_wallpaper_for_all(&self, name: HSTRING) -> HRESULT;
 
             pub unsafe fn copy_desktop_state(
                 &self,
@@ -145,8 +133,6 @@ reusable_com_interface!(
             ) -> HRESULT;
 
             pub unsafe fn get_desktop_is_per_monitor(&self, out_per_monitor: *mut i32) -> HRESULT;
-
-            pub unsafe fn set_desktop_is_per_monitor(&self, per_monitor: i32) -> HRESULT;
         }
     }
 );
@@ -154,50 +140,35 @@ reusable_com_interface!(
 reusable_com_interface!(
     MacroOptions {
         temp_macro_name: _IVirtualDesktopNotification,
-        iid: "cd403e52-deed-4c13-b437-b98380f2b1e8",
+        iid: "f3163e11-6b04-433c-a64b-6f82c9094257",
     },
     {
         pub unsafe trait IVirtualDesktopNotification: IUnknown {
             pub unsafe fn virtual_desktop_created(
                 &self,
-                monitors: ComIn<IObjectArray>,
                 desktop: ComIn<IVirtualDesktop>,
             ) -> HRESULT;
 
             pub unsafe fn virtual_desktop_destroy_begin(
                 &self,
-                monitors: ComIn<IObjectArray>,
                 desktop_destroyed: ComIn<IVirtualDesktop>,
                 desktop_fallback: ComIn<IVirtualDesktop>,
             ) -> HRESULT;
 
             pub unsafe fn virtual_desktop_destroy_failed(
                 &self,
-                monitors: ComIn<IObjectArray>,
                 desktop_destroyed: ComIn<IVirtualDesktop>,
                 desktop_fallback: ComIn<IVirtualDesktop>,
             ) -> HRESULT;
 
             pub unsafe fn virtual_desktop_destroyed(
                 &self,
-                monitors: ComIn<IObjectArray>,
                 desktop_destroyed: ComIn<IVirtualDesktop>,
                 desktop_fallback: ComIn<IVirtualDesktop>,
             ) -> HRESULT;
 
-            pub unsafe fn virtual_desktop_is_per_monitor_changed(
-                &self,
-                is_per_monitor: i32,
-            ) -> HRESULT;
-
             // This method is new:
-            pub unsafe fn virtual_desktop_moved(
-                &self,
-                monitors: ComIn<IObjectArray>,
-                desktop: ComIn<IVirtualDesktop>,
-                old_index: i64,
-                new_index: i64,
-            ) -> HRESULT;
+            pub unsafe fn virtual_desktop_is_per_monitor_changed(&self, i: i64) -> HRESULT;
 
             pub unsafe fn virtual_desktop_name_changed(
                 &self,
@@ -212,27 +183,8 @@ reusable_com_interface!(
 
             pub unsafe fn current_virtual_desktop_changed(
                 &self,
-                monitors: ComIn<IObjectArray>,
                 desktop_old: ComIn<IVirtualDesktop>,
                 desktop_new: ComIn<IVirtualDesktop>,
-            ) -> HRESULT;
-
-            // These methods are new:
-
-            pub unsafe fn virtual_desktop_wallpaper_changed(
-                &self,
-                desktop: ComIn<IVirtualDesktop>,
-                name: HSTRING,
-            ) -> HRESULT;
-
-            pub unsafe fn virtual_desktop_switched(
-                &self,
-                desktop: ComIn<IVirtualDesktop>,
-            ) -> HRESULT;
-
-            pub unsafe fn remote_virtual_desktop_connected(
-                &self,
-                desktop: ComIn<IVirtualDesktop>,
             ) -> HRESULT;
         }
 
@@ -249,17 +201,12 @@ reusable_com_interface!(
         where
             T: build_dyn::IVirtualDesktopNotification_Impl,
         {
-            unsafe fn virtual_desktop_created(
-                &self,
-                _monitors: ComIn<IObjectArray>,
-                desktop: ComIn<IVirtualDesktop>,
-            ) -> HRESULT {
+            unsafe fn virtual_desktop_created(&self, desktop: ComIn<IVirtualDesktop>) -> HRESULT {
                 self.inner.virtual_desktop_created(desktop.into())
             }
 
             unsafe fn virtual_desktop_destroy_begin(
                 &self,
-                _monitors: ComIn<IObjectArray>,
                 desktop_destroyed: ComIn<IVirtualDesktop>,
                 desktop_fallback: ComIn<IVirtualDesktop>,
             ) -> HRESULT {
@@ -271,7 +218,6 @@ reusable_com_interface!(
 
             unsafe fn virtual_desktop_destroy_failed(
                 &self,
-                _monitors: ComIn<IObjectArray>,
                 desktop_destroyed: ComIn<IVirtualDesktop>,
                 desktop_fallback: ComIn<IVirtualDesktop>,
             ) -> HRESULT {
@@ -283,7 +229,6 @@ reusable_com_interface!(
 
             unsafe fn virtual_desktop_destroyed(
                 &self,
-                _monitors: ComIn<IObjectArray>,
                 desktop_destroyed: ComIn<IVirtualDesktop>,
                 desktop_fallback: ComIn<IVirtualDesktop>,
             ) -> HRESULT {
@@ -291,22 +236,8 @@ reusable_com_interface!(
                     .virtual_desktop_destroyed(desktop_destroyed.into(), desktop_fallback.into())
             }
 
-            unsafe fn virtual_desktop_is_per_monitor_changed(
-                &self,
-                _is_per_monitor: i32,
-            ) -> HRESULT {
+            unsafe fn virtual_desktop_is_per_monitor_changed(&self, _i: i64) -> HRESULT {
                 HRESULT(0)
-            }
-
-            unsafe fn virtual_desktop_moved(
-                &self,
-                _monitors: ComIn<IObjectArray>,
-                desktop: ComIn<IVirtualDesktop>,
-                old_index: i64,
-                new_index: i64,
-            ) -> HRESULT {
-                self.inner
-                    .virtual_desktop_moved(desktop.into(), old_index, new_index)
             }
 
             unsafe fn virtual_desktop_name_changed(
@@ -327,32 +258,11 @@ reusable_com_interface!(
 
             unsafe fn current_virtual_desktop_changed(
                 &self,
-                _monitors: ComIn<IObjectArray>,
                 desktop_old: ComIn<IVirtualDesktop>,
                 desktop_new: ComIn<IVirtualDesktop>,
             ) -> HRESULT {
                 self.inner
                     .current_virtual_desktop_changed(desktop_old.into(), desktop_new.into())
-            }
-
-            unsafe fn virtual_desktop_wallpaper_changed(
-                &self,
-                desktop: ComIn<IVirtualDesktop>,
-                name: HSTRING,
-            ) -> HRESULT {
-                self.inner
-                    .virtual_desktop_wallpaper_changed(desktop.into(), name)
-            }
-
-            unsafe fn virtual_desktop_switched(&self, desktop: ComIn<IVirtualDesktop>) -> HRESULT {
-                self.inner.virtual_desktop_switched(desktop.into())
-            }
-
-            unsafe fn remote_virtual_desktop_connected(
-                &self,
-                desktop: ComIn<IVirtualDesktop>,
-            ) -> HRESULT {
-                self.inner.remote_virtual_desktop_connected(desktop.into())
             }
         }
     }
