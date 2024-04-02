@@ -163,7 +163,7 @@ unsafe impl<T: ComInterface> PointerRepr for T {
 ///
 /// E.g.
 ///
-/// ```rust
+/// ```rust,ignore
 /// fn get_current_desktop(&mut self, desktop: &mut Option<IVirtualDesktop>) -> HRESULT;
 /// fn switch_desktop(&self, desktop: ManuallyDrop<IVirtualDesktop>) -> HRESULT;
 ///
@@ -178,7 +178,7 @@ unsafe impl<T: ComInterface> PointerRepr for T {
 ///
 /// To make things safer and easier to use, ComIn is used instead.
 ///
-/// ```rust
+/// ```rust,ignore
 /// fn get_current_desktop(&mut self, desktop: &mut Option<IVirtualDesktop>) -> HRESULT;
 /// fn switch_desktop(&self, desktop: ComIn<IVirtualDesktop>) -> HRESULT;
 ///

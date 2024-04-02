@@ -189,7 +189,7 @@ pub struct ComObjects {
     view_collection: RefCell<Option<Rc<IApplicationViewCollection>>>,
 }
 
-fn retry_function<F, R>(com_objects: &ComObjects, f: F, fn_name: &str) -> Result<R>
+fn retry_function<F, R>(com_objects: &ComObjects, f: F, _fn_name: &str) -> Result<R>
 where
     F: Fn() -> Result<R>,
 {
@@ -203,8 +203,7 @@ where
                     || er == &Error::ComAllocatedNullPtr
                     || er == &Error::ComNotInitialized =>
             {
-                #[cfg(debug_assertions)]
-                log_output(&format!("Retry the function \"{fn_name}\" after {:?}", er));
+                log_format!("Retry the function \"{_fn_name}\" after {:?}", er);
 
                 if er == &Error::ComNotInitialized {
                     let _ = unsafe { CoIncrementMTAUsage() };
@@ -226,10 +225,10 @@ where
 
     #[cfg(debug_assertions)]
     if let Err(er) = &value {
-        log_output(&format!(
-            "Com_objects function \"{fn_name}\" failed with {:?}",
+        log_format!(
+            "Com_objects function \"{_fn_name}\" failed with {:?}",
             er
-        ));
+        );
     }
 
     value

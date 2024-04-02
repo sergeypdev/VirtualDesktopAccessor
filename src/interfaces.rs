@@ -57,7 +57,7 @@ use windows::{
 ///
 /// E.g.
 ///
-/// ```rust
+/// ```rust,ignore
 /// fn get_current_desktop(&mut self, desktop: &mut Option<IVirtualDesktop>) -> HRESULT;
 /// fn switch_desktop(&self, desktop: ManuallyDrop<IVirtualDesktop>) -> HRESULT;
 ///
@@ -72,7 +72,7 @@ use windows::{
 ///
 /// To make things safer and easier to use, ComIn is used instead.
 ///
-/// ```rust
+/// ```rust,ignore
 /// fn get_current_desktop(&mut self, desktop: &mut Option<IVirtualDesktop>) -> HRESULT;
 /// fn switch_desktop(&self, desktop: ComIn<IVirtualDesktop>) -> HRESULT;
 ///
