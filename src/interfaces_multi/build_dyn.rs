@@ -335,6 +335,12 @@ macro_rules! support_interface {
                     self as *mut _
                 }
             }
+            /// *mut Abstract -> *mut Versioned
+            impl ForwardArg<*mut self::$version::$name> for *mut $name {
+                fn forward(self) -> *mut self::$version::$name {
+                    self as *mut _
+                }
+            }
         )*
         /// Preform the same action for each version of the wrapped COM interface.
         ///
@@ -408,18 +414,81 @@ macro_rules! forward_call {
             }
         }
     );
-    (
+    // No function body => forward the call automatically:
+    (@item
+        #[forward_for = $name:ident]
         $( #[$attr:meta] )*
-        impl $name:ident {
-            $($item:item)*
+        $pub:vis
+        $(unsafe $(@ $unsafe:tt)?)?
+        fn $fname:ident (
+            &$self_:ident $(,)? $( $arg_name:ident : $ArgTy:ty ),* $(,)?
+        ) -> $RetTy:ty;
+    ) => {
+        $( #[$attr] )*
+        #[allow(unused_parens)]
+        $pub
+        $(unsafe $($unsafe)?)?
+        fn $fname (
+            &$self_, $( $arg_name : $ArgTy ),*
+        ) -> $RetTy
+        {
+            unsafe {
+                $name!(
+                    $self_,
+                    |v| (*v).$fname( $(
+                        ForwardArg::forward($arg_name)
+                    ),*)
+                )
+            }
+        }
+    };
+    // Manual body implementation:
+    (@item
+        #[forward_for = $name:ident]
+        $( #[$attr:meta] )*
+        $pub:vis
+        $(unsafe $(@ $unsafe:tt)?)?
+        fn $fname:ident (
+            &$self_:ident $(,)? $( $arg_name:ident : $ArgTy:ty ),* $(,)?
+        ) -> $RetTy:ty {
+            $($body:tt)*
         }
     ) => {
-        $(#[$attr])*
+        $( #[$attr] )*
+        #[allow(unused_parens)]
+        $pub
+        $(unsafe $($unsafe)?)?
+        fn $fname (
+            &$self_, $( $arg_name : $ArgTy ),*
+        ) -> $RetTy
+        { $($body)* }
+    };
+    (
+        $( #[$attr_impl:meta] )*
+        impl $name:ident {
+            $(
+                $( #[$($attr_item:tt)*] )*
+                $pub:vis
+                $(unsafe $(@ $unsafe:tt)?)?
+                fn $fname:ident $params:tt -> $RetTy:ty $({
+                    $($body:tt)*
+                })?
+                $(; $(<= $semi:tt)?)?
+            )*
+        }
+    ) => {
+        $(#[$attr_impl])*
         impl $name {
             $(
-                #[apply(forward_call)]
-                #[forward_for = $name]
-                $item
+                forward_call! {@item
+                    #[forward_for = $name]
+                    $(#[$($attr_item)*])*
+                    $pub
+                    $(unsafe $($unsafe)?)?
+                    fn $fname $params -> $RetTy
+                    $({ $($body)* })?
+                    $(; $($semi)?)?
+                }
             )*
         }
     };
@@ -430,141 +499,96 @@ support_interface!(as IApplicationViewInner for IApplicationView in all [build_1
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct IApplicationView(IUnknown);
+#[apply(forward_call)]
 impl IApplicationView {
     /* IInspecateble */
-    #[apply(forward_call)]
-    #[forward_for = IApplicationView]
     pub unsafe fn get_iids(
         &self,
         out_iid_count: *mut ULONG,
         out_opt_iid_array_ptr: *mut *mut GUID,
     ) -> HRESULT;
-    #[apply(forward_call)]
-    #[forward_for = IApplicationView]
-    pub unsafe fn get_runtime_class_name(&self, out_opt_class_name: *mut HSTRING) -> HRESULT;
-    #[apply(forward_call)]
-    #[forward_for = IApplicationView]
+    pub unsafe fn get_runtime_class_name(
+        &self,
+        out_opt_class_name: *mut HSTRING,
+    ) -> HRESULT;
     pub unsafe fn get_trust_level(&self, ptr_trust_level: LPVOID) -> HRESULT;
 
     /* IApplicationView methods */
-    #[apply(forward_call)]
-    #[forward_for = IApplicationView]
     pub unsafe fn set_focus(&self) -> HRESULT;
-    #[apply(forward_call)]
-    #[forward_for = IApplicationView]
     pub unsafe fn switch_to(&self) -> HRESULT;
 
-    #[apply(forward_call)]
-    #[forward_for = IApplicationView]
     pub unsafe fn try_invoke_back(&self, ptr_async_callback: IAsyncCallback) -> HRESULT;
-    #[apply(forward_call)]
-    #[forward_for = IApplicationView]
     pub unsafe fn get_thumbnail_window(&self, out_hwnd: *mut HWND) -> HRESULT;
-    #[apply(forward_call)]
-    #[forward_for = IApplicationView]
     pub unsafe fn get_monitor(&self, out_monitors: *mut *mut IImmersiveMonitor) -> HRESULT;
-    #[apply(forward_call)]
-    #[forward_for = IApplicationView]
     pub unsafe fn get_visibility(&self, out_int: LPVOID) -> HRESULT;
-    #[apply(forward_call)]
-    #[forward_for = IApplicationView]
     pub unsafe fn set_cloak(
         &self,
         application_view_cloak_type: APPLICATION_VIEW_CLOAK_TYPE,
         unknown: INT,
     ) -> HRESULT;
-    #[apply(forward_call)]
-    #[forward_for = IApplicationView]
     pub unsafe fn get_position(
         &self,
         unknowniid: *const GUID,
         unknown_array_ptr: LPVOID,
     ) -> HRESULT;
-    #[apply(forward_call)]
-    #[forward_for = IApplicationView]
-    pub unsafe fn set_position(&self, view_position: *mut IApplicationViewPosition) -> HRESULT;
-    #[apply(forward_call)]
-    #[forward_for = IApplicationView]
+    pub unsafe fn set_position(
+        &self,
+        view_position: *mut IApplicationViewPosition,
+    ) -> HRESULT;
     pub unsafe fn insert_after_window(&self, window: HWND) -> HRESULT;
-    #[apply(forward_call)]
-    #[forward_for = IApplicationView]
     pub unsafe fn get_extended_frame_position(&self, rect: *mut RECT) -> HRESULT;
-    #[apply(forward_call)]
-    #[forward_for = IApplicationView]
     pub unsafe fn get_app_user_model_id(&self, id: *mut PWSTR) -> HRESULT; // Proc17
-    #[apply(forward_call)]
-    #[forward_for = IApplicationView]
     pub unsafe fn set_app_user_model_id(&self, id: PCWSTR) -> HRESULT;
-    #[apply(forward_call)]
-    #[forward_for = IApplicationView]
-    pub unsafe fn is_equal_by_app_user_model_id(&self, id: PCWSTR, out_result: *mut INT)
-        -> HRESULT;
+    pub unsafe fn is_equal_by_app_user_model_id(
+        &self,
+        id: PCWSTR,
+        out_result: *mut INT,
+    ) -> HRESULT;
 
     /*** IApplicationView methods ***/
-    #[apply(forward_call)]
-    #[forward_for = IApplicationView]
     pub unsafe fn get_view_state(&self, out_state: *mut UINT) -> HRESULT; // Proc20
-    #[apply(forward_call)]
-    #[forward_for = IApplicationView]
     pub unsafe fn set_view_state(&self, state: UINT) -> HRESULT; // Proc21
-    #[apply(forward_call)]
-    #[forward_for = IApplicationView]
     pub unsafe fn get_neediness(&self, out_neediness: *mut INT) -> HRESULT; // Proc22
-    #[apply(forward_call)]
-    #[forward_for = IApplicationView]
-    pub unsafe fn get_last_activation_timestamp(&self, out_timestamp: *mut ULONGLONG) -> HRESULT;
-    #[apply(forward_call)]
-    #[forward_for = IApplicationView]
+    pub unsafe fn get_last_activation_timestamp(
+        &self,
+        out_timestamp: *mut ULONGLONG,
+    ) -> HRESULT;
     pub unsafe fn set_last_activation_timestamp(&self, timestamp: ULONGLONG) -> HRESULT;
-    #[apply(forward_call)]
-    #[forward_for = IApplicationView]
     pub unsafe fn get_virtual_desktop_id(&self, out_desktop_guid: *mut GUID) -> HRESULT;
-    #[apply(forward_call)]
-    #[forward_for = IApplicationView]
     pub unsafe fn set_virtual_desktop_id(&self, desktop_guid: *const GUID) -> HRESULT;
-    #[apply(forward_call)]
-    #[forward_for = IApplicationView]
     pub unsafe fn get_show_in_switchers(&self, out_show: *mut INT) -> HRESULT;
-    #[apply(forward_call)]
-    #[forward_for = IApplicationView]
     pub unsafe fn set_show_in_switchers(&self, show: INT) -> HRESULT;
-    #[apply(forward_call)]
-    #[forward_for = IApplicationView]
     pub unsafe fn get_scale_factor(&self, out_scale_factor: *mut INT) -> HRESULT;
-    #[apply(forward_call)]
-    #[forward_for = IApplicationView]
     pub unsafe fn can_receive_input(&self, out_can: *mut BOOL) -> HRESULT;
-    #[apply(forward_call)]
-    #[forward_for = IApplicationView]
     pub unsafe fn get_compatibility_policy_type(
         &self,
         out_policy_type: *mut APPLICATION_VIEW_COMPATIBILITY_POLICY,
     ) -> HRESULT;
-    #[apply(forward_call)]
-    #[forward_for = IApplicationView]
     pub unsafe fn set_compatibility_policy_type(
         &self,
         policy_type: APPLICATION_VIEW_COMPATIBILITY_POLICY,
     ) -> HRESULT;
+    pub unsafe fn get_position_priority(
+        &self,
+        out_priority: *mut IShellPositionerPriority,
+    ) -> HRESULT;
+    pub unsafe fn set_position_priority(
+        &self,
+        priority: IShellPositionerPriority,
+    ) -> HRESULT;
 
-    #[apply(forward_call)]
-    #[forward_for = IApplicationView]
     pub unsafe fn get_size_constraints(
         &self,
         monitor: *mut IImmersiveMonitor,
         out_size1: *mut SIZE,
         out_size2: *mut SIZE,
     ) -> HRESULT;
-    #[apply(forward_call)]
-    #[forward_for = IApplicationView]
     pub unsafe fn get_size_constraints_for_dpi(
         &self,
         dpi: UINT,
         out_size1: *mut SIZE,
         out_size2: *mut SIZE,
     ) -> HRESULT;
-    #[apply(forward_call)]
-    #[forward_for = IApplicationView]
     pub unsafe fn set_size_constraints_for_dpi(
         &self,
         dpi: *const UINT,
@@ -572,76 +596,36 @@ impl IApplicationView {
         size2: *const SIZE,
     ) -> HRESULT;
 
-    #[apply(forward_call)]
-    #[forward_for = IApplicationView]
+    pub unsafe fn query_size_constraints_from_app(&self) -> HRESULT;
     pub unsafe fn on_min_size_preferences_updated(&self, window: HWND) -> HRESULT;
-    #[apply(forward_call)]
-    #[forward_for = IApplicationView]
-    pub unsafe fn apply_operation(&self, operation: *mut IApplicationViewOperation) -> HRESULT;
-    #[apply(forward_call)]
-    #[forward_for = IApplicationView]
+    pub unsafe fn apply_operation(
+        &self,
+        operation: *mut IApplicationViewOperation,
+    ) -> HRESULT;
     pub unsafe fn is_tray(&self, out_is: *mut BOOL) -> HRESULT;
-    #[apply(forward_call)]
-    #[forward_for = IApplicationView]
     pub unsafe fn is_in_high_zorder_band(&self, out_is: *mut BOOL) -> HRESULT;
-    #[apply(forward_call)]
-    #[forward_for = IApplicationView]
     pub unsafe fn is_splash_screen_presented(&self, out_is: *mut BOOL) -> HRESULT;
-    #[apply(forward_call)]
-    #[forward_for = IApplicationView]
     pub unsafe fn flash(&self) -> HRESULT;
-    pub unsafe fn get_root_switchable_owner(&self, app_view: *mut IApplicationView) -> HRESULT {
-        // proc45
-        IApplicationView!(self, |inner| inner
-            .get_root_switchable_owner(app_view as *mut _))
-    }
-
-    #[apply(forward_call)]
-    #[forward_for = IApplicationView]
+    pub unsafe fn get_root_switchable_owner(
+        &self,
+        app_view: *mut IApplicationView,
+    ) -> HRESULT; // proc45
     pub unsafe fn enumerate_ownership_tree(&self, objects: *mut IObjectArray) -> HRESULT; // proc46
 
-    #[apply(forward_call)]
-    #[forward_for = IApplicationView]
     pub unsafe fn get_enterprise_id(&self, out_id: *mut PWSTR) -> HRESULT; // proc47
-    #[apply(forward_call)]
-    #[forward_for = IApplicationView]
     pub unsafe fn is_mirrored(&self, out_is: *mut BOOL) -> HRESULT; //
 
-    #[apply(forward_call)]
-    #[forward_for = IApplicationView]
     pub unsafe fn unknown1(&self, arg: *mut INT) -> HRESULT;
-    #[apply(forward_call)]
-    #[forward_for = IApplicationView]
     pub unsafe fn unknown2(&self, arg: *mut INT) -> HRESULT;
-    #[apply(forward_call)]
-    #[forward_for = IApplicationView]
     pub unsafe fn unknown3(&self, arg: *mut INT) -> HRESULT;
-    #[apply(forward_call)]
-    #[forward_for = IApplicationView]
     pub unsafe fn unknown4(&self, arg: INT) -> HRESULT;
-    #[apply(forward_call)]
-    #[forward_for = IApplicationView]
     pub unsafe fn unknown5(&self, arg: *mut INT) -> HRESULT;
-    #[apply(forward_call)]
-    #[forward_for = IApplicationView]
     pub unsafe fn unknown6(&self, arg: INT) -> HRESULT;
-    #[apply(forward_call)]
-    #[forward_for = IApplicationView]
     pub unsafe fn unknown7(&self) -> HRESULT;
-    #[apply(forward_call)]
-    #[forward_for = IApplicationView]
     pub unsafe fn unknown8(&self, arg: *mut INT) -> HRESULT;
-    #[apply(forward_call)]
-    #[forward_for = IApplicationView]
     pub unsafe fn unknown9(&self, arg: INT) -> HRESULT;
-    #[apply(forward_call)]
-    #[forward_for = IApplicationView]
     pub unsafe fn unknown10(&self, arg: INT, arg2: INT) -> HRESULT;
-    #[apply(forward_call)]
-    #[forward_for = IApplicationView]
     pub unsafe fn unknown11(&self, arg: INT) -> HRESULT;
-    #[apply(forward_call)]
-    #[forward_for = IApplicationView]
     pub unsafe fn unknown12(&self, arg: *mut SIZE) -> HRESULT;
 }
 
@@ -650,16 +634,13 @@ support_interface!(as IVirtualDesktopInner for IVirtualDesktop in [build_10240, 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct IVirtualDesktop(IUnknown);
+#[apply(forward_call)]
 impl IVirtualDesktop {
-    #[apply(forward_call)]
-    #[forward_for = IVirtualDesktop]
     pub unsafe fn is_view_visible(
         &self,
         p_view: ComIn<IApplicationView>,
         out_bool: *mut u32,
     ) -> HRESULT;
-    #[apply(forward_call)]
-    #[forward_for = IVirtualDesktop]
     pub unsafe fn get_id(&self, out_guid: *mut GUID) -> HRESULT;
 
     pub unsafe fn get_name(&self, out_string: *mut HSTRING) -> HRESULT {
@@ -681,17 +662,12 @@ support_interface!(as IApplicationViewCollectionInner for IApplicationViewCollec
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct IApplicationViewCollection(IUnknown);
+#[apply(forward_call)]
 impl IApplicationViewCollection {
-    #[apply(forward_call)]
-    #[forward_for = IApplicationViewCollection]
     pub unsafe fn get_views(&self, out_views: *mut IObjectArray) -> HRESULT;
 
-    #[apply(forward_call)]
-    #[forward_for = IApplicationViewCollection]
     pub unsafe fn get_views_by_zorder(&self, out_views: *mut IObjectArray) -> HRESULT;
 
-    #[apply(forward_call)]
-    #[forward_for = IApplicationViewCollection]
     pub unsafe fn get_views_by_app_user_model_id(
         &self,
         id: PCWSTR,
@@ -732,8 +708,6 @@ impl IApplicationViewCollection {
         }
     }
 
-    #[apply(forward_call)]
-    #[forward_for = IApplicationViewCollection]
     pub unsafe fn refresh_collection(&self) -> HRESULT;
 
     pub unsafe fn register_for_application_view_changes(
@@ -747,8 +721,6 @@ impl IApplicationViewCollection {
         }
     }
 
-    #[apply(forward_call)]
-    #[forward_for = IApplicationViewCollection]
     pub unsafe fn unregister_for_application_view_changes(&self, id: DWORD) -> HRESULT;
 }
 impl IApplicationViewCollection {
@@ -850,17 +822,13 @@ support_interface!(as IVirtualDesktopNotificationServiceInner for IVirtualDeskto
 #[repr(transparent)]
 pub struct IVirtualDesktopNotificationService(IUnknown);
 
+#[apply(forward_call)]
 impl IVirtualDesktopNotificationService {
-    #[apply(forward_call)]
-    #[forward_for = IVirtualDesktopNotificationService]
     pub unsafe fn register(
         &self,
         notification: *mut std::ffi::c_void,
         out_cookie: *mut DWORD,
     ) -> HRESULT;
-
-    #[apply(forward_call)]
-    #[forward_for = IVirtualDesktopNotificationService]
     pub unsafe fn unregister(&self, cookie: u32) -> HRESULT;
 }
 impl IVirtualDesktopNotificationService {
@@ -885,13 +853,10 @@ support_interface!(as IVirtualDesktopManagerInternalInner for IVirtualDesktopMan
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct IVirtualDesktopManagerInternal(IUnknown);
+#[apply(forward_call)]
 impl IVirtualDesktopManagerInternal {
-    #[apply(forward_call)]
-    #[forward_for = IVirtualDesktopManagerInternal]
     pub unsafe fn get_desktop_count(&self, out_count: *mut UINT) -> HRESULT;
 
-    #[apply(forward_call)]
-    #[forward_for = IVirtualDesktopManagerInternal]
     pub unsafe fn move_view_to_desktop(
         &self,
         view: ComIn<IApplicationView>,
@@ -901,7 +866,7 @@ impl IVirtualDesktopManagerInternal {
     pub unsafe fn can_move_view_between_desktops(
         &self,
         view: ComIn<IApplicationView>,
-        can_move: &mut i32,
+        can_move: *mut i32,
     ) -> HRESULT {
         unsafe {
             IVirtualDesktopManagerInternal!(self, |i| i
@@ -909,16 +874,10 @@ impl IVirtualDesktopManagerInternal {
         }
     }
 
-    #[apply(forward_call)]
-    #[forward_for = IVirtualDesktopManagerInternal]
     pub unsafe fn get_current_desktop(&self, out_desktop: *mut Option<IVirtualDesktop>) -> HRESULT;
 
-    #[apply(forward_call)]
-    #[forward_for = IVirtualDesktopManagerInternal]
     pub unsafe fn get_desktops(&self, out_desktops: *mut Option<IObjectArray>) -> HRESULT;
 
-    #[apply(forward_call)]
-    #[forward_for = IVirtualDesktopManagerInternal]
     /// Get next or previous desktop
     ///
     /// Direction values:
@@ -931,12 +890,8 @@ impl IVirtualDesktopManagerInternal {
         out_pp_desktop: *mut Option<IVirtualDesktop>,
     ) -> HRESULT;
 
-    #[apply(forward_call)]
-    #[forward_for = IVirtualDesktopManagerInternal]
     pub unsafe fn switch_desktop(&self, desktop: ComIn<IVirtualDesktop>) -> HRESULT;
 
-    #[apply(forward_call)]
-    #[forward_for = IVirtualDesktopManagerInternal]
     pub unsafe fn create_desktop(&self, out_desktop: *mut Option<IVirtualDesktop>) -> HRESULT;
 
     pub unsafe fn move_desktop(&self, in_desktop: ComIn<IVirtualDesktop>, index: UINT) -> HRESULT {
@@ -948,8 +903,6 @@ impl IVirtualDesktopManagerInternal {
         }
     }
 
-    #[apply(forward_call)]
-    #[forward_for = IVirtualDesktopManagerInternal]
     pub unsafe fn remove_desktop(
         &self,
         destroy_desktop: ComIn<IVirtualDesktop>,
@@ -1033,15 +986,10 @@ support_interface!(as IVirtualDesktopPinnedAppsInner for IVirtualDesktopPinnedAp
 #[repr(transparent)]
 pub struct IVirtualDesktopPinnedApps(IUnknown);
 
+#[apply(forward_call)]
 impl IVirtualDesktopPinnedApps {
-    #[apply(forward_call)]
-    #[forward_for = IVirtualDesktopPinnedApps]
     pub unsafe fn is_app_pinned(&self, app_id: PCWSTR, out_iss: *mut bool) -> HRESULT;
-    #[apply(forward_call)]
-    #[forward_for = IVirtualDesktopPinnedApps]
     pub unsafe fn pin_app(&self, app_id: PCWSTR) -> HRESULT;
-    #[apply(forward_call)]
-    #[forward_for = IVirtualDesktopPinnedApps]
     pub unsafe fn unpin_app(&self, app_id: PCWSTR) -> HRESULT;
 
     pub unsafe fn is_view_pinned(
@@ -1053,11 +1001,7 @@ impl IVirtualDesktopPinnedApps {
             IVirtualDesktopPinnedApps!(self, |inner| inner.is_view_pinned(view.into(), out_iss))
         }
     }
-    #[apply(forward_call)]
-    #[forward_for = IVirtualDesktopPinnedApps]
     pub unsafe fn pin_view(&self, view: ComIn<IApplicationView>) -> HRESULT;
-    #[apply(forward_call)]
-    #[forward_for = IVirtualDesktopPinnedApps]
     pub unsafe fn unpin_view(&self, view: ComIn<IApplicationView>) -> HRESULT;
 }
 impl IVirtualDesktopPinnedApps {
