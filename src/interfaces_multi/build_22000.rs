@@ -41,7 +41,7 @@ reusable_com_interface!(
     },
     {
         pub unsafe trait IVirtualDesktopManagerInternal: IUnknown {
-            pub unsafe fn get_desktop_count(
+            pub unsafe fn get_desktop_count_m(
                 &self,
                 monitor: HMONITOR,
                 out_count: *mut UINT,
@@ -59,7 +59,7 @@ reusable_com_interface!(
                 can_move: *mut i32,
             ) -> HRESULT;
 
-            pub unsafe fn get_current_desktop(
+            pub unsafe fn get_current_desktop_m(
                 &self,
                 monitor: HMONITOR,
                 out_desktop: *mut Option<IVirtualDesktop>,
@@ -70,7 +70,7 @@ reusable_com_interface!(
                 out_desktops: *mut Option<IObjectArray>,
             ) -> HRESULT;
 
-            pub unsafe fn get_desktops(
+            pub unsafe fn get_desktops_m(
                 &self,
                 monitor: HMONITOR,
                 out_desktops: *mut Option<IObjectArray>,
@@ -88,19 +88,19 @@ reusable_com_interface!(
                 out_pp_desktop: *mut Option<IVirtualDesktop>,
             ) -> HRESULT;
 
-            pub unsafe fn switch_desktop(
+            pub unsafe fn switch_desktop_m(
                 &self,
                 monitor: HMONITOR,
                 desktop: ComIn<IVirtualDesktop>,
             ) -> HRESULT;
 
-            pub unsafe fn create_desktop(
+            pub unsafe fn create_desktop_m(
                 &self,
                 monitor: HMONITOR,
                 out_desktop: *mut Option<IVirtualDesktop>,
             ) -> HRESULT;
 
-            pub unsafe fn move_desktop(
+            pub unsafe fn move_desktop_m(
                 &self,
                 in_desktop: ComIn<IVirtualDesktop>,
                 monitor: HMONITOR,
@@ -147,6 +147,46 @@ reusable_com_interface!(
             pub unsafe fn get_desktop_is_per_monitor(&self, out_per_monitor: *mut i32) -> HRESULT;
 
             pub unsafe fn set_desktop_is_per_monitor(&self, per_monitor: i32) -> HRESULT;
+        }
+        impl IVirtualDesktopManagerInternal {
+            pub unsafe fn get_desktop_count(&self, out_count: *mut UINT) -> HRESULT {
+                self.get_desktop_count_m(0, out_count)
+            }
+            pub unsafe fn get_current_desktop(
+                &self,
+                out_desktop: *mut Option<IVirtualDesktop>,
+            ) -> HRESULT {
+                self.get_current_desktop_m(0, out_desktop)
+            }
+
+            pub unsafe fn get_desktops(
+                &self,
+                out_desktops: *mut Option<IObjectArray>,
+            ) -> HRESULT {
+                self.get_desktops_m(0, out_desktops)
+            }
+
+            pub unsafe fn switch_desktop(
+                &self,
+                desktop: ComIn<IVirtualDesktop>,
+            ) -> HRESULT {
+                self.switch_desktop_m(0, desktop)
+            }
+
+            pub unsafe fn create_desktop(
+                &self,
+                out_desktop: *mut Option<IVirtualDesktop>,
+            ) -> HRESULT {
+                self.create_desktop_m(0, out_desktop)
+            }
+
+            pub unsafe fn move_desktop(
+                &self,
+                in_desktop: ComIn<IVirtualDesktop>,
+                index: UINT,
+            ) -> HRESULT {
+                self.move_desktop_m(in_desktop, 0, index)
+            }
         }
     }
 );

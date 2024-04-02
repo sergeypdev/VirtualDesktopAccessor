@@ -34,15 +34,15 @@ macro_rules! declare_WindowsVersion {
                 }
             }
         }
-        impl Default for WindowsVersion {
-            fn default() -> Self {
-                *Self::ALL.last().expect("No Windows version is supported")
-            }
-        }
     };
 }
 with_versions!(declare_WindowsVersion);
 
+impl Default for WindowsVersion {
+    fn default() -> Self {
+        *Self::ALL.last().expect("No Windows version is supported")
+    }
+}
 // Check that the versions are sorted when they were declared, this is a bit
 // slow currently so it has been disabled:
 // impl WindowsVersion {
@@ -154,7 +154,11 @@ impl WindowsVersion {
                 .max_by_key(|(_, version)| *version)
                 .map(|(v, _)| v)
                 .unwrap_or_default();
-            log_format!("Using COM interfaces for Windows version: {latest_supported:?}");
+            log_format!(
+                "Using COM interfaces for Windows version: {latest_supported:?} \
+                (Detected Windows version was: {:?}.{:?}.{:?})",
+                version.dwMajorVersion, version.dwMinorVersion, version.dwBuildNumber
+            );
             latest_supported
         })
     }
@@ -264,7 +268,7 @@ macro_rules! support_interface {
             /// The IID for the COM interface that is supported by this
             /// platform, return a zeroed GUID if the interface isn't supported.
             #[allow(non_snake_case, unreachable_patterns)]
-            pub unsafe fn IID() -> GUID {
+            pub fn IID() -> GUID {
                 match WindowsVersion::get() {
                     $(WindowsVersion::$version => self::$version::$name::IID,)*
                     _ => GUID::zeroed(),
@@ -497,36 +501,9 @@ macro_rules! support_interface {
 /// Implement a method by calling the same method on the Windows version
 /// dependant COM interface.
 macro_rules! forward_call {
-    (
-        #[forward_for = $name:ident]
-        $( #[$attr:meta] )*
-        $pub:vis
-        $(unsafe $(@ $unsafe:tt)?)?
-        fn $fname:ident (
-            &$self_:ident $(,)? $( $arg_name:ident : $ArgTy:ty ),* $(,)?
-        ) -> $RetTy:ty;
-    ) => (
-        $( #[$attr] )*
-        #[allow(unused_parens)]
-        $pub
-        $(unsafe $($unsafe)?)?
-        fn $fname (
-            &$self_, $( $arg_name : $ArgTy ),*
-        ) -> $RetTy
-        {
-            unsafe {
-                $name!(
-                    $self_,
-                    |v| (*v).$fname( $(
-                        ForwardArg::forward($arg_name)
-                    ),*)
-                )
-            }
-        }
-    );
     // No function body => forward the call automatically (sometimes not
     // implemented for the versioned interface):
-    (@item
+    (
         #[forward_for = $name:ident]
         #[optional_method]
         $( #[$attr:meta] )*
@@ -563,6 +540,8 @@ macro_rules! forward_call {
             unsafe {
                 $name!(
                     $self_,
+                    // Note: important to deref here otherwise we would call the
+                    // fallback method on the `InCom` wrapper
                     |v| (*v).$fname( $(
                         ForwardArg::forward($arg_name)
                     ),*)
@@ -571,7 +550,7 @@ macro_rules! forward_call {
         }
     };
     // No function body => forward the call automatically:
-    (@item
+    (
         #[forward_for = $name:ident]
         $( #[$attr:meta] )*
         $pub:vis
@@ -598,8 +577,8 @@ macro_rules! forward_call {
             }
         }
     };
-    // Manual body implementation:
-    (@item
+    // Manual body implementation (leave it unchanged):
+    (
         #[forward_for = $name:ident]
         $( #[$attr:meta] )*
         $pub:vis
@@ -619,6 +598,7 @@ macro_rules! forward_call {
         ) -> $RetTy
         { $($body)* }
     };
+    // Apply forward_call to all items in a trait:
     (
         $( #[$attr_impl:meta] )*
         impl $name:ident {
@@ -636,7 +616,7 @@ macro_rules! forward_call {
         $(#[$attr_impl])*
         impl $name {
             $(
-                forward_call! {@item
+                forward_call! {
                     #[forward_for = $name]
                     $(#[$($attr_item)*])*
                     $pub
@@ -867,12 +847,16 @@ support_interface!(MacroOptions {
     enum_name: IVirtualDesktopNotificationInner,
     all_versions: true,
 });
-
+/// Create a [`IVirtualDesktopNotification`] from any type that implements its
+/// interface using [`IVirtualDesktopNotification_Impl`].
 impl<T> From<T> for IVirtualDesktopNotification
 where
     T: IVirtualDesktopNotification_Impl,
 {
     fn from(value: T) -> Self {
+        // Each Windows version has a unique "adaptor" type that implements its
+        // COM interface by delegating to any type that implements the shared
+        // IVirtualDesktopNotification_Impl trait.
         macro_rules! get_adaptor {
             (versions = {$($version:ident,)*},) => {
                 match WindowsVersion::get() {
@@ -988,30 +972,7 @@ support_interface!(MacroOptions {
 
 #[apply(forward_call)]
 impl IVirtualDesktopManagerInternal {
-    pub unsafe fn get_desktop_count(&self, out_count: *mut UINT) -> HRESULT {
-        struct Specialize<T>(T);
-        impl Specialize<&build_20348::IVirtualDesktopManagerInternal> {
-            unsafe fn get_desktop_count(&self, out_count: *mut UINT) -> HRESULT {
-                self.0.get_desktop_count(0, out_count)
-            }
-        }
-        impl Specialize<&build_22000::IVirtualDesktopManagerInternal> {
-            unsafe fn get_desktop_count(&self, out_count: *mut UINT) -> HRESULT {
-                self.0.get_desktop_count(0, out_count)
-            }
-        }
-        // The compiler prefers inherit methods and only derefs if no such
-        // method can be found.
-        impl<T> core::ops::Deref for Specialize<T> {
-            type Target = T;
-            fn deref(&self) -> &T {
-                &self.0
-            }
-        }
-        IVirtualDesktopManagerInternal!(self, |this: version::Versioned| {
-            Specialize(&*this).get_desktop_count(out_count)
-        })
-    }
+    pub unsafe fn get_desktop_count(&self, out_count: *mut UINT) -> HRESULT;
 
     pub unsafe fn move_view_to_desktop(
         &self,
@@ -1025,55 +986,9 @@ impl IVirtualDesktopManagerInternal {
         can_move: *mut i32,
     ) -> HRESULT;
 
-    pub unsafe fn get_current_desktop(&self, out_desktop: *mut Option<IVirtualDesktop>) -> HRESULT {
-        struct Specialize<T>(T);
-        impl Specialize<&build_20348::IVirtualDesktopManagerInternal> {
-            unsafe fn get_current_desktop(&self, out_desktop: *mut Option<IVirtualDesktop>) -> HRESULT {
-                self.0.get_current_desktop(0, out_desktop.forward())
-            }
-        }
-        impl Specialize<&build_22000::IVirtualDesktopManagerInternal> {
-            unsafe fn get_current_desktop(&self, out_desktop: *mut Option<IVirtualDesktop>) -> HRESULT {
-                self.0.get_current_desktop(0, out_desktop.forward())
-            }
-        }
-        // The compiler prefers inherit methods and only derefs if no such
-        // method can be found.
-        impl<T> core::ops::Deref for Specialize<T> {
-            type Target = T;
-            fn deref(&self) -> &T {
-                &self.0
-            }
-        }
-        IVirtualDesktopManagerInternal!(self, |this: version::Versioned| {
-            Specialize(&*this).get_current_desktop(out_desktop.forward())
-        })
-    }
+    pub unsafe fn get_current_desktop(&self, out_desktop: *mut Option<IVirtualDesktop>) -> HRESULT;
 
-    pub unsafe fn get_desktops(&self, out_desktops: *mut Option<IObjectArray>) -> HRESULT {
-        struct Specialize<T>(T);
-        impl Specialize<&build_20348::IVirtualDesktopManagerInternal> {
-            unsafe fn get_desktops(&self, out_desktops: *mut Option<IObjectArray>) -> HRESULT {
-                self.0.get_desktops(0, out_desktops)
-            }
-        }
-        impl Specialize<&build_22000::IVirtualDesktopManagerInternal> {
-            unsafe fn get_desktops(&self, out_desktops: *mut Option<IObjectArray>) -> HRESULT {
-                self.0.get_desktops(0, out_desktops)
-            }
-        }
-        // The compiler prefers inherit methods and only derefs if no such
-        // method can be found.
-        impl<T> core::ops::Deref for Specialize<T> {
-            type Target = T;
-            fn deref(&self) -> &T {
-                &self.0
-            }
-        }
-        IVirtualDesktopManagerInternal!(self, |this: version::Versioned| {
-            Specialize(&*this).get_desktops(out_desktops)
-        })
-    }
+    pub unsafe fn get_desktops(&self, out_desktops: *mut Option<IObjectArray>) -> HRESULT;
 
     /// Get next or previous desktop
     ///
@@ -1087,87 +1002,12 @@ impl IVirtualDesktopManagerInternal {
         out_pp_desktop: *mut Option<IVirtualDesktop>,
     ) -> HRESULT;
 
-    pub unsafe fn switch_desktop(&self, desktop: ComIn<IVirtualDesktop>) -> HRESULT {
-        struct Specialize<T>(T);
-        impl Specialize<&build_20348::IVirtualDesktopManagerInternal> {
-            unsafe fn switch_desktop(&self, desktop: ComIn<IVirtualDesktop>) -> HRESULT {
-                self.0.switch_desktop(0, desktop.forward())
-            }
-        }
-        impl Specialize<&build_22000::IVirtualDesktopManagerInternal> {
-            unsafe fn switch_desktop(&self, desktop: ComIn<IVirtualDesktop>) -> HRESULT {
-                self.0.switch_desktop(0, desktop.forward())
-            }
-        }
-        // The compiler prefers inherit methods and only derefs if no such
-        // method can be found.
-        impl<T> core::ops::Deref for Specialize<T> {
-            type Target = T;
-            fn deref(&self) -> &T {
-                &self.0
-            }
-        }
-        IVirtualDesktopManagerInternal!(self, |this: version::Versioned| {
-            Specialize(&*this).switch_desktop(desktop.forward())
-        })
-    }
+    pub unsafe fn switch_desktop(&self, desktop: ComIn<IVirtualDesktop>) -> HRESULT;
 
-    pub unsafe fn create_desktop(&self, out_desktop: *mut Option<IVirtualDesktop>) -> HRESULT {
-        struct Specialize<T>(T);
-        impl Specialize<&build_20348::IVirtualDesktopManagerInternal> {
-            unsafe fn create_desktop(&self, out_desktop: *mut Option<IVirtualDesktop>) -> HRESULT {
-                self.0.create_desktop(0, out_desktop.forward())
-            }
-        }
-        impl Specialize<&build_22000::IVirtualDesktopManagerInternal> {
-            unsafe fn create_desktop(&self, out_desktop: *mut Option<IVirtualDesktop>) -> HRESULT {
-                self.0.create_desktop(0, out_desktop.forward())
-            }
-        }
-        // The compiler prefers inherit methods and only derefs if no such
-        // method can be found.
-        impl<T> core::ops::Deref for Specialize<T> {
-            type Target = T;
-            fn deref(&self) -> &T {
-                &self.0
-            }
-        }
-        IVirtualDesktopManagerInternal!(self, |this: version::Versioned| {
-            Specialize(&*this).create_desktop(out_desktop.forward())
-        })
-    }
+    pub unsafe fn create_desktop(&self, out_desktop: *mut Option<IVirtualDesktop>) -> HRESULT;
 
-    pub unsafe fn move_desktop(&self, in_desktop: ComIn<IVirtualDesktop>, index: UINT) -> HRESULT {
-        struct Specialize<T>(T);
-        impl Specialize<&build_22000::IVirtualDesktopManagerInternal> {
-            unsafe fn move_desktop(&self, in_desktop: ComIn<IVirtualDesktop>, index: UINT) -> HRESULT {
-                self.0.move_desktop(in_desktop.forward(), 0, index)
-            }
-        }
-        // The compiler prefers inherit methods and only derefs if no such
-        // method can be found.
-        impl<T> core::ops::Deref for Specialize<T> {
-            type Target = T;
-            fn deref(&self) -> &T {
-                &self.0
-            }
-        }
-
-        trait __FallbackNotImpl {
-            unsafe fn move_desktop(&self, in_desktop: ComIn<IVirtualDesktop>, index: UINT) -> HRESULT;
-        }
-
-        IVirtualDesktopManagerInternal!(self, |this: version::Versioned| {
-            // Only uses trait methods if there aren't any inherent methods
-            impl __FallbackNotImpl for Versioned {
-                unsafe fn move_desktop(&self, _: ComIn<IVirtualDesktop>, _: UINT) -> HRESULT {
-                    E_NOTIMPL
-                }
-            }
-
-            Specialize(&*this).move_desktop(in_desktop.forward(), index)
-        })
-    }
+    #[optional_method]
+    pub unsafe fn move_desktop(&self, in_desktop: ComIn<IVirtualDesktop>, index: UINT) -> HRESULT;
 
     pub unsafe fn remove_desktop(
         &self,
