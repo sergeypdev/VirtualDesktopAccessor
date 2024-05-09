@@ -4,7 +4,6 @@ use super::Result;
 use std::convert::TryFrom;
 use std::rc::Rc;
 use std::{cell::RefCell, ffi::c_void};
-use windows::core::ComInterface;
 use windows::core::HRESULT;
 use windows::Win32::Foundation::HWND;
 use windows::Win32::System::Com::CoIncrementMTAUsage;
