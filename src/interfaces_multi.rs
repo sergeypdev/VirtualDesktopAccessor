@@ -20,7 +20,7 @@
 use std::ffi::c_void;
 use std::ops::Deref;
 use windows::{
-    core::{ComInterface, IUnknown, IUnknown_Vtbl, GUID, HRESULT, HSTRING},
+    core::{Interface, IUnknown, IUnknown_Vtbl, GUID, HRESULT, HSTRING},
     Win32::{Foundation::HWND, UI::Shell::Common::IObjectArray},
 };
 
@@ -144,7 +144,7 @@ use _reusable_com_interface as reusable_com_interface;
 pub unsafe trait PointerRepr {
     fn as_pointer_repr(&self) -> *mut c_void;
 }
-unsafe impl<T: ComInterface> PointerRepr for T {
+unsafe impl<T: Interface> PointerRepr for T {
     fn as_pointer_repr(&self) -> *mut c_void {
         windows::core::Interface::as_raw(self)
     }

@@ -10,7 +10,7 @@ use super::*;
 use crate::comobjects::HRESULTHelpers;
 use core::{ffi::c_void, marker::PhantomData};
 use windows::{
-    core::{ComInterface, Interface, GUID, HRESULT, HSTRING},
+    core::{Interface, GUID, HRESULT, HSTRING},
     Win32::{
         Foundation::{E_NOTIMPL, HWND},
         UI::Shell::Common::IObjectArray,
@@ -126,8 +126,11 @@ impl WindowsVersion {
                 Some(&mut cb_data as *mut u32),
             )
         };
-        if let Err(e) = res {
-            log_format!("Failed to read Windows patch version from the registry: {e:?}");
+        if res.is_err() {
+            log_format!(
+                "Failed to read Windows patch version from the registry: {:?}",
+                windows::core::Error::from(res.to_hresult())
+            );
             return None;
         }
 
@@ -232,7 +235,7 @@ pub trait WithVersionedType<F, R> {
 /// specific Windows version.
 ///
 /// Implement this when you want to make use of a concrete COM interface type.
-pub trait WithVersionedTypeCallback<T: ComInterface, R> {
+pub trait WithVersionedTypeCallback<T: Interface, R> {
     fn call(self) -> R;
 }
 
@@ -1156,7 +1159,7 @@ impl<COM, T> WithVersionedTypeCallback<COM, Result<T, windows::core::Error>>
     for IObjectArrayGetAtCallback<'_, T>
 where
     // The COM interface for this specific Windows version:
-    COM: ComInterface,
+    COM: Interface,
     // Should be possible to convert it into the more generic type:
     T: From<COM>,
 {

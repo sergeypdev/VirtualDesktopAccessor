@@ -40,7 +40,7 @@ use crate::comobjects::HRESULTHelpers;
 use std::ffi::c_void;
 use std::ops::Deref;
 use windows::{
-    core::{ComInterface, IUnknown, IUnknown_Vtbl, Interface, GUID, HRESULT, HSTRING},
+    core::{IUnknown, IUnknown_Vtbl, Interface, GUID, HRESULT, HSTRING},
     Win32::{Foundation::HWND, UI::Shell::Common::IObjectArray},
 };
 
@@ -83,12 +83,12 @@ use windows::{
 /// }
 /// ```
 #[repr(transparent)]
-pub struct ComIn<'a, T: ComInterface> {
+pub struct ComIn<'a, T: Interface> {
     data: *mut c_void,
     _phantom: std::marker::PhantomData<&'a T>,
 }
 
-impl<'a, T: ComInterface> ComIn<'a, T> {
+impl<'a, T: Interface> ComIn<'a, T> {
     pub fn new(t: &'a T) -> Self {
         Self {
             // Copies the raw Inteface pointer
@@ -98,7 +98,7 @@ impl<'a, T: ComInterface> ComIn<'a, T> {
     }
 }
 
-impl<'a, T: ComInterface> Deref for ComIn<'a, T> {
+impl<'a, T: Interface> Deref for ComIn<'a, T> {
     type Target = T;
     fn deref(&self) -> &Self::Target {
         unsafe { std::mem::transmute(&self.data) }
@@ -584,7 +584,7 @@ impl IVirtualDesktopPinnedApps {
 /// Re-export of [`IObjectArray::GetAt`] to match API of the
 /// [`crate::interfaces_multi`] module.
 #[allow(non_snake_case)]
-pub unsafe fn IObjectArrayGetAt<T: ComInterface>(
+pub unsafe fn IObjectArrayGetAt<T: Interface>(
     array: &IObjectArray,
     index: UINT,
 ) -> windows::core::Result<T> {
