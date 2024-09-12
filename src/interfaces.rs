@@ -532,6 +532,31 @@ pub unsafe trait IVirtualDesktopManagerInternal: IUnknown {
     pub unsafe fn set_name(&self, desktop: ComIn<IVirtualDesktop>, name: HSTRING) -> HRESULT;
     pub unsafe fn set_wallpaper(&self, desktop: ComIn<IVirtualDesktop>, name: HSTRING) -> HRESULT;
     pub unsafe fn update_wallpaper_for_all(&self, name: HSTRING) -> HRESULT;
+
+    pub unsafe fn copy_desktop_state(
+        &self,
+        view0: ComIn<IApplicationView>,
+        view1: ComIn<IApplicationView>,
+    ) -> HRESULT;
+
+    pub unsafe fn create_remote_desktop(
+        &self,
+        name: HSTRING,
+        out_desktop: *mut Option<IVirtualDesktop>,
+    ) -> HRESULT;
+    pub unsafe fn switch_remote_desktop(&self, desktop: ComIn<IVirtualDesktop>) -> HRESULT;
+
+    pub unsafe fn switch_desktop_with_animation(
+        &self,
+        desktop: ComIn<IVirtualDesktop>,
+    ) -> HRESULT;
+
+    pub unsafe fn get_last_active_desktop(
+        &self,
+        out_desktop: *mut Option<IVirtualDesktop>,
+    ) -> HRESULT;
+
+    pub unsafe fn wait_for_animation_to_complete(&self) -> HRESULT;
 }
 impl IVirtualDesktopManagerInternal {
     pub unsafe fn query_service(provider: &IServiceProvider) -> crate::Result<Self> {

@@ -159,17 +159,11 @@ reusable_com_interface!(
                 self.get_current_desktop_m(0, out_desktop)
             }
 
-            pub unsafe fn get_desktops(
-                &self,
-                out_desktops: *mut Option<IObjectArray>,
-            ) -> HRESULT {
+            pub unsafe fn get_desktops(&self, out_desktops: *mut Option<IObjectArray>) -> HRESULT {
                 self.get_desktops_m(0, out_desktops)
             }
 
-            pub unsafe fn switch_desktop(
-                &self,
-                desktop: ComIn<IVirtualDesktop>,
-            ) -> HRESULT {
+            pub unsafe fn switch_desktop(&self, desktop: ComIn<IVirtualDesktop>) -> HRESULT {
                 self.switch_desktop_m(0, desktop)
             }
 
@@ -186,6 +180,13 @@ reusable_com_interface!(
                 index: UINT,
             ) -> HRESULT {
                 self.move_desktop_m(in_desktop, 0, index)
+            }
+
+            pub unsafe fn switch_desktop_with_animation(
+                &self,
+                desktop: ComIn<IVirtualDesktop>,
+            ) -> HRESULT {
+                self.switch_desktop(desktop)
             }
         }
     }
