@@ -1,7 +1,8 @@
 //! Support for Windows 10.
 //!
-//! The [`IVirtualDesktopNotification`] and [`IVirtualDesktopManagerInternal`]
-//! interfaces do not take "monitor" arguments.
+//! The [`struct@IVirtualDesktopNotification`] and
+//! [`struct@IVirtualDesktopManagerInternal`] interfaces do not take "monitor"
+//! arguments.
 use super::*;
 
 reusable_com_interface!(

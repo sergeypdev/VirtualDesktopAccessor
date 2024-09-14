@@ -1,6 +1,6 @@
-//! New for this version is that the [`IVirtualDesktopNotification`] interface
-//! takes "monitors" as arguments, previously only the
-//! [`IVirtualDesktopManagerInternal`] interface used them.
+//! New for this version is that the [`struct@IVirtualDesktopNotification`]
+//! interface takes "monitors" as arguments, previously only the
+//! [`struct@IVirtualDesktopManagerInternal`] interface used them.
 
 use super::*;
 use build_10240 as prev_build;

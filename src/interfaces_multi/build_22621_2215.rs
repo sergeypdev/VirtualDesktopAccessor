@@ -1,10 +1,11 @@
 //! New for this version is that "monitor" arguments are no longer passed to the
-//! [`IVirtualDesktopNotification`] and [`IVirtualDesktopManagerInternal`]
-//! interfaces.
+//! [`struct@IVirtualDesktopNotification`] and
+//! [`struct@IVirtualDesktopManagerInternal`] interfaces.
 //!
 //! # References
 //!
-//! - [New changes for 22621 · Ciantic/VirtualDesktopAccessor@c918946](https://github.com/Ciantic/VirtualDesktopAccessor/commit/c918946421c42a7f022abdf8b4672a4b3ddf2f35#diff-e073b55bb9e1746ee6b3a029ba955df76b3d61e774585c23535bd0b4967d9e18)
+//! - [New changes for 22621 ·
+//!   Ciantic/VirtualDesktopAccessor@c918946](https://github.com/Ciantic/VirtualDesktopAccessor/commit/c918946421c42a7f022abdf8b4672a4b3ddf2f35#diff-e073b55bb9e1746ee6b3a029ba955df76b3d61e774585c23535bd0b4967d9e18)
 //! - <https://github.com/mzomparelli/VirtualDesktop/tree/7e37b9848aef681713224dae558d2e51960cf41e/src/VirtualDesktop/Interop/Build22621_2215>
 use super::*;
 

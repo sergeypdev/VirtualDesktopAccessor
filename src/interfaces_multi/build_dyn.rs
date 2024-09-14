@@ -381,7 +381,7 @@ macro_rules! support_interface {
                     }
                 }
             }
-            /// ComIn<Versioned> -> ComIn<Abstract>
+            /// `ComIn<Versioned> -> ComIn<Abstract>`
             impl<'a> From<ComIn<'a, self::$version::$name>> for ComIn<'a, $name> {
                 fn from(v: ComIn<'a, self::$version::$name>) -> Self {
                     ComIn::new(<&$name as From<_>>::from(ComIn::into_ref(&v)))
@@ -395,7 +395,7 @@ macro_rules! support_interface {
                     unsafe { core::mem::transmute(v.0) }
                 }
             }
-            /// ComIn<Abstract> -> ComIn<Versioned> (fallible)
+            /// `ComIn<Abstract> -> ComIn<Versioned>` (fallible)
             impl<'a> From<ComIn<'a, $name>> for ComIn<'a, self::$version::$name> {
                 #[allow(irrefutable_let_patterns)]
                 fn from(v: ComIn<'a, $name>) -> Self {
@@ -406,19 +406,19 @@ macro_rules! support_interface {
                     }
                 }
             }
-            /// ComIn<Abstract> -> ComIn<Versioned> (fallible)
+            /// `ComIn<Abstract> -> ComIn<Versioned>` (fallible)
             impl<'a> ForwardArg<ComIn<'a, self::$version::$name>> for ComIn<'a, $name> {
                 fn forward(self) -> ComIn<'a, self::$version::$name> {
                     self.into()
                 }
             }
-            /// *mut Option<Abstract> -> *mut Option<Versioned>
+            /// `*mut Option<Abstract>` -> `*mut Option<Versioned>`
             impl ForwardArg<*mut Option<self::$version::$name>> for *mut Option<$name> {
                 fn forward(self) -> *mut Option<self::$version::$name> {
                     self as *mut _
                 }
             }
-            /// *mut Abstract -> *mut Versioned
+            /// `*mut Abstract` -> `*mut Versioned`
             impl ForwardArg<*mut self::$version::$name> for *mut $name {
                 fn forward(self) -> *mut self::$version::$name {
                     self as *mut _
@@ -903,8 +903,8 @@ support_interface!(MacroOptions {
     enum_name: IVirtualDesktopNotificationInner,
     all_versions: true,
 });
-/// Create a [`IVirtualDesktopNotification`] from any type that implements its
-/// interface using [`IVirtualDesktopNotification_Impl`].
+/// Create a [`struct@IVirtualDesktopNotification`] from any type that
+/// implements its interface using [`IVirtualDesktopNotification_Impl`].
 impl<T> From<T> for IVirtualDesktopNotification
 where
     T: IVirtualDesktopNotification_Impl,
