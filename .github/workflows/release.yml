@@ -27,17 +27,44 @@ jobs:
           name: release_dll
           path: target/release/VirtualDesktopAccessor.dll
 
+  cbindgen:
+    name: Generate C Header
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cbindgen
+        run: cargo install cbindgen
+
+      - name: Generate C Header
+        run: cbindgen --config ./dll/cbindgen.toml --crate dll --output VirtualDesktopAccessor.h
+
+      - name: Upload C Header
+        uses: actions/upload-artifact@v4
+        with:
+          name: release_c_header
+          path: VirtualDesktopAccessor.h
+
   release:
     name: Release
     runs-on: windows-latest
-    needs: build
+    needs: [build, cbindgen]
     permissions:
       contents: write
     steps:
-      - name: Download binary from previous job
+      - name: Download DLL from previous job
         uses: actions/download-artifact@v4
         with:
           name: release_dll
+
+      - name: Download C Header from previous job
+        uses: actions/download-artifact@v4
+        with:
+          name: release_c_header
 
       # Create the release:  https://github.com/actions/create-release
       - name: Create release
@@ -52,8 +79,8 @@ jobs:
           prerelease: false
 
       # Upload release asset:   https://github.com/actions/upload-release-asset
-      - name: Upload release asset
-        id: upload-release-asset
+      - name: Upload release DLL
+        id: upload-release-dll
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -62,4 +89,16 @@ jobs:
           asset_path: VirtualDesktopAccessor.dll
           asset_name: VirtualDesktopAccessor.dll
           asset_content_type: application/octet-stream
-          # asset_content_type: application/zip
+
+      # Upload release asset:   https://github.com/actions/upload-release-asset
+      - name: Upload release C Header
+        id: upload-release-c-header
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}  # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
+          asset_path: VirtualDesktopAccessor.h
+          asset_name: VirtualDesktopAccessor.h
+          asset_content_type: text/x-c-header
+
