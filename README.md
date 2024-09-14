@@ -29,7 +29,7 @@ fn GetWindowDesktopNumber(hwnd: HWND) -> i32
 fn IsWindowOnCurrentVirtualDesktop(hwnd: HWND) -> i32
 fn MoveWindowToDesktopNumber(hwnd: HWND, desktop_number: i32) -> i32
 fn GoToDesktopNumber(desktop_number: i32) -> i32
-fn GoToDesktopNumberWithAnimation(desktop_number: i32) -> i32 // Win11 only + Forked DLL only
+fn GoToDesktopNumberWithAnimation(desktop_number: i32) -> i32 // Win11 only + forked DLL only
 fn SetDesktopName(desktop_number: i32, in_name_ptr: *const i8) -> i32  // Win11 only
 fn GetDesktopName(desktop_number: i32, out_utf8_ptr: *mut u8, out_utf8_len: usize) -> i32 // Win11 only
 fn RegisterPostMessageHook(listener_hwnd: HWND, message_offset: u32) -> i32
@@ -41,6 +41,6 @@ fn IsPinnedApp(hwnd: HWND) -> i32
 fn PinApp(hwnd: HWND) -> i32
 fn UnPinApp(hwnd: HWND) -> i32
 fn IsWindowOnDesktopNumber(hwnd: HWND, desktop_number: i32) -> i32
-fn CreateDesktop() -> i32
-fn RemoveDesktop(remove_desktop_number: i32, fallback_desktop_number: i32) -> i32
+fn CreateDesktop() -> i32 // Win10 in forked DLL only
+fn RemoveDesktop(remove_desktop_number: i32, fallback_desktop_number: i32) -> i32 // Win10 in forked DLL only
 ```
