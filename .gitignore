@@ -8,4 +8,7 @@
 
 /examples
 
+# cbindgen generated header file:
+VirtualDesktopAccessor.h
+
 _*
