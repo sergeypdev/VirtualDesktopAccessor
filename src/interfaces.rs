@@ -2,7 +2,7 @@
 //!
 //! Most of the functions are not tested or used, beware if you try to use these
 //! for something else. Notably I know that most out parameters defined as `*mut
-//! IMyObject` are incorrect, they probably should be *mut Option<IMyObject>.
+//! IMyObject` are incorrect, they probably should be `*mut Option<IMyObject>`.
 //!
 //! Generally these are the rules:
 //! 1. InOpt = `Option<ComIn<IMyObject>>` or `Option<ManuallyDrop<IMyObject>>`
