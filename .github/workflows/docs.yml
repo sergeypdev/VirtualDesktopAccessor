@@ -36,7 +36,7 @@ jobs:
         run: cargo clean --doc
 
       - name: Build docs
-        run: cargo doc --document-private-items --no-deps
+        run: cargo doc --document-private-items --no-deps --features multiple-windows-versions
 
       - name: Add redirect
         run: echo '<meta http-equiv="refresh" content="0;url=winvd/index.html">' > target/doc/index.html
