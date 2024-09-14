@@ -1,7 +1,7 @@
 use winit::{
     event::{Event, WindowEvent},
-    event_loop::{ControlFlow, EventLoopBuilder},
-    window::WindowBuilder,
+    event_loop::{ControlFlow, EventLoop},
+    window::WindowAttributes,
 };
 use winvd::*;
 
@@ -21,10 +21,12 @@ impl From<DesktopEvent> for MyCustomEvents {
 }
 
 fn main() {
-    let event_loop = EventLoopBuilder::<MyCustomEvents>::with_user_event()
+    let event_loop = EventLoop::<MyCustomEvents>::with_user_event()
         .build()
         .unwrap();
-    let your_app_window = WindowBuilder::new().build(&event_loop).unwrap();
+    let your_app_window = event_loop
+        .create_window(WindowAttributes::default())
+        .unwrap();
 
     let proxy = event_loop.create_proxy();
     let mut _thread = listen_desktop_events(proxy).unwrap();
