@@ -11,7 +11,9 @@ This repository also contains [Rust library `winvd`](./README-crate.md) for acce
 
 ## Download from releases:
 
-[Download the DLL from releases ⬇️](https://github.com/Ciantic/VirtualDesktopAccessor/releases/)
+[Download the DLL from releases of original project ⬇️](https://github.com/Ciantic/VirtualDesktopAccessor/releases/)
+
+[Download the DLL from releases of this fork (Works with any Windows version and has extra DLL functions) ⬇️](https://github.com/Lej77/VirtualDesktopAccessor/releases/)
 
 ## Reference of exported DLL functions
 
@@ -27,7 +29,7 @@ fn GetWindowDesktopNumber(hwnd: HWND) -> i32
 fn IsWindowOnCurrentVirtualDesktop(hwnd: HWND) -> i32
 fn MoveWindowToDesktopNumber(hwnd: HWND, desktop_number: i32) -> i32
 fn GoToDesktopNumber(desktop_number: i32) -> i32
-fn GoToDesktopNumberWithAnimation(desktop_number: i32) -> i32 // Win11 only
+fn GoToDesktopNumberWithAnimation(desktop_number: i32) -> i32 // Win11 only + Forked DLL only
 fn SetDesktopName(desktop_number: i32, in_name_ptr: *const i8) -> i32  // Win11 only
 fn GetDesktopName(desktop_number: i32, out_utf8_ptr: *mut u8, out_utf8_len: usize) -> i32 // Win11 only
 fn RegisterPostMessageHook(listener_hwnd: HWND, message_offset: u32) -> i32
