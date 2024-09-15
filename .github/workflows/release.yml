@@ -19,7 +19,7 @@ jobs:
       #  uses: Swatinem/rust-cache@v2
 
       - name: Build release DLL
-        run: cargo build --manifest-path .\dll\Cargo.toml --release
+        run: cargo build --release --manifest-path .\dll\Cargo.toml --features multiple-windows-versions
 
       - name: Upload DLL
         uses: actions/upload-artifact@v4
