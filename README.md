@@ -4,7 +4,7 @@ DLL for accessing Windows 11 (requires at least 23H2 22631.3085, tested with 226
 
 This repository also contains [Rust library `winvd`](./README-crate.md) for accessing the Virtual Desktop via Rust bindings.
 
-You can browse the latest documentation of the forked `winvd` library at:
+You can browse the latest documentation of the forked `winvd` library at:\
 <https://lej77.github.io/VirtualDesktopAccessor>
 
 ## AutoHotkey example here:
