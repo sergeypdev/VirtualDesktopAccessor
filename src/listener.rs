@@ -191,10 +191,11 @@ impl IVirtualDesktopNotification_Impl for VirtualDesktopNotification {
         desktop_new: ComIn<IVirtualDesktop>,
     ) -> HRESULT {
         eat_error(|| {
-            Ok((self.sender)(DesktopEvent::DesktopChanged {
+            (self.sender)(DesktopEvent::DesktopChanged {
                 old: desktop_old.try_into()?,
                 new: desktop_new.try_into()?,
-            }))
+            });
+            Ok(())
         });
         HRESULT(0)
     }
@@ -205,19 +206,21 @@ impl IVirtualDesktopNotification_Impl for VirtualDesktopNotification {
         name: HSTRING,
     ) -> HRESULT {
         eat_error(|| {
-            Ok((self.sender)(DesktopEvent::DesktopWallpaperChanged(
+            (self.sender)(DesktopEvent::DesktopWallpaperChanged(
                 desktop.try_into()?,
                 name.to_string(),
-            )))
+            ));
+            Ok(())
         });
         HRESULT(0)
     }
 
     unsafe fn virtual_desktop_created(&self, desktop: ComIn<IVirtualDesktop>) -> HRESULT {
         eat_error(|| {
-            Ok((self.sender)(DesktopEvent::DesktopCreated(
+            (self.sender)(DesktopEvent::DesktopCreated(
                 desktop.try_into()?,
-            )))
+            ));
+            Ok(())
         });
         HRESULT(0)
     }
@@ -245,10 +248,11 @@ impl IVirtualDesktopNotification_Impl for VirtualDesktopNotification {
     ) -> HRESULT {
         // Desktop destroyed is not anymore in the stack
         eat_error(|| {
-            Ok((self.sender)(DesktopEvent::DesktopDestroyed {
+            (self.sender)(DesktopEvent::DesktopDestroyed {
                 destroyed: desktop_destroyed.try_into()?,
                 fallback: desktop_fallback.try_into()?,
-            }))
+            });
+            Ok(())
         });
         HRESULT(0)
     }
@@ -260,11 +264,12 @@ impl IVirtualDesktopNotification_Impl for VirtualDesktopNotification {
         new_index: i64,
     ) -> HRESULT {
         eat_error(|| {
-            Ok((self.sender)(DesktopEvent::DesktopMoved {
+            (self.sender)(DesktopEvent::DesktopMoved {
                 desktop: desktop.try_into()?,
                 old_index,
                 new_index,
-            }))
+            });
+            Ok(())
         });
         HRESULT(0)
     }
@@ -275,10 +280,11 @@ impl IVirtualDesktopNotification_Impl for VirtualDesktopNotification {
         name: HSTRING,
     ) -> HRESULT {
         eat_error(|| {
-            Ok((self.sender)(DesktopEvent::DesktopNameChanged(
+            (self.sender)(DesktopEvent::DesktopNameChanged(
                 desktop.try_into()?,
                 name.to_string(),
-            )))
+            ));
+            Ok(())
         });
         HRESULT(0)
     }

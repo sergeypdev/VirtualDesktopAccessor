@@ -230,7 +230,7 @@ fn test_pin_notepad_app() {
 fn test_rename_desktop() {
     sync_test(|| {
         let desktops = get_desktops().unwrap();
-        let first_desktop = desktops.get(0).take().unwrap();
+        let first_desktop = desktops.first().take().unwrap();
         let first_desktop_name_before = first_desktop.get_name().unwrap();
 
         // Pre-condition

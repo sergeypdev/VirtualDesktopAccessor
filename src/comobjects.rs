@@ -425,7 +425,8 @@ impl ComObjects {
                 if out_count == 0 || res.is_err() {
                     return false;
                 }
-                return true;
+
+                true
             }
             Err(_) => false,
         }
@@ -817,7 +818,7 @@ impl ComObjects {
     #[apply(retry_function)]
     pub fn set_desktop_wallpaper(&self, desktop: &DesktopInternal, path: &str) -> Result<()> {
         let manager_internal = self.get_manager_internal()?;
-        let desktop = self.get_idesktop(&desktop)?;
+        let desktop = self.get_idesktop(desktop)?;
         unsafe {
             manager_internal
                 .set_wallpaper(ComIn::new(&desktop), HSTRING::from(path))
