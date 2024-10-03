@@ -7,14 +7,6 @@
 //!
 //! We manage Virtual Desktops using unstable COM interfaces which change their
 //! ids and definitions regularly.
-//!
-//! # References
-//!
-//! - Interface ids at [VirtualDesktop/src/VirtualDesktop/app.config at 7e37b9848aef681713224dae558d2e51960cf41e · mzomparelli/VirtualDesktop](https://github.com/mzomparelli/VirtualDesktop/blob/7e37b9848aef681713224dae558d2e51960cf41e/src/VirtualDesktop/app.config)
-//! - Bindings at [VirtualDesktop/src/VirtualDesktop/Interop at 7e37b9848aef681713224dae558d2e51960cf41e · mzomparelli/VirtualDesktop](https://github.com/mzomparelli/VirtualDesktop/tree/7e37b9848aef681713224dae558d2e51960cf41e/src/VirtualDesktop/Interop)
-//!   - These are actually compiled when the app is executed by the `ComInterfaceAssemblyBuilder.CreateAssembly` method at: [VirtualDesktop/src/VirtualDesktop/Interop/ComInterfaceAssemblyBuilder.cs at 7e37b9848aef681713224dae558d2e51960cf41e · mzomparelli/VirtualDesktop](https://github.com/mzomparelli/VirtualDesktop/blob/7e37b9848aef681713224dae558d2e51960cf41e/src/VirtualDesktop/Interop/ComInterfaceAssemblyBuilder.cs#L84-L153)
-//! - Bindings at [MScholtes/VirtualDesktop at 6de804dced760778450ae3cd1481f8969f75fb39](https://github.com/MScholtes/VirtualDesktop/tree/6de804dced760778450ae3cd1481f8969f75fb39)
-
 #![allow(non_upper_case_globals, clippy::upper_case_acronyms)]
 
 use std::ffi::c_void;
