@@ -3,6 +3,12 @@
 //! The [`struct@IVirtualDesktopNotification`] and
 //! [`struct@IVirtualDesktopManagerInternal`] interfaces do not take "monitor"
 //! arguments.
+//!
+//! Interface definitions were ported from the [C# library
+//! Slion/VirtualDesktop](https://github.com/Slion/VirtualDesktop/tree/7e37b9848aef681713224dae558d2e51960cf41e/src/VirtualDesktop/Interop/Build10240_0000).
+//! Note however that it didn't specify interface ids so the ones in this file
+//! is for Windows version 16299 (the earliest specified by that project).
+
 use super::*;
 
 reusable_com_interface!(
