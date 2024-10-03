@@ -1,3 +1,11 @@
+//! Windows 11, version 23H2
+//!
+//! From [Wikipedia](https://en.wikipedia.org/wiki/Windows_11,_version_23H2):
+//!
+//! > The Windows 11 2023 Update (also known as version 23H2 and codenamed "Sun
+//! > Valley 3") is the second major update to Windows 11. It was shipped as an
+//! > enablement package for Windows 11 2022 Update and carries the build number
+//! > 10.0.22631.
 use super::*;
 use build_22621_2215 as prev_build;
 

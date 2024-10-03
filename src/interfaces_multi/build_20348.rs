@@ -1,3 +1,8 @@
+//! Windows Server 2022, see
+//! [Wikipedia](https://en.wikipedia.org/wiki/List_of_Microsoft_Windows_versions).
+//!
+//! # Interface definitions
+//!
 //! New for this version is that the [`struct@IVirtualDesktopManagerInternal`]
 //! interfaces take "monitor" arguments, note that the The
 //! [`struct@IVirtualDesktopNotification`] interface still doesn't use monitors.

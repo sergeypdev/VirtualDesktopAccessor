@@ -1,8 +1,18 @@
+//! Windows 11, version 22H2
+//!
+//! From [Wikipedia](https://en.wikipedia.org/wiki/Windows_11,_version_22H2):
+//!
+//! > The Windows 11 2022 Update[1] (also known as version 22H2[2][3] and
+//! > codenamed "Sun Valley 2") is the first major update to Windows 11. It
+//! > carries the build number 10.0.22621.
+//!
+//! # Interface definitions
+//!
 //! New for this version is that "monitor" arguments are no longer passed to the
 //! [`struct@IVirtualDesktopNotification`] and
 //! [`struct@IVirtualDesktopManagerInternal`] interfaces.
 //!
-//! # References
+//! ## References
 //!
 //! - [New changes for 22621 ·
 //!   Ciantic/VirtualDesktopAccessor@c918946](https://github.com/Ciantic/VirtualDesktopAccessor/commit/c918946421c42a7f022abdf8b4672a4b3ddf2f35#diff-e073b55bb9e1746ee6b3a029ba955df76b3d61e774585c23535bd0b4967d9e18)

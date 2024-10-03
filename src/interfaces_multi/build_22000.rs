@@ -1,3 +1,13 @@
+//! Windows 11, version 21H2
+//!
+//! From [Wikipedia](https://en.wikipedia.org/wiki/Windows_11,_version_21H2):
+//!
+//! > The original version of Windows 11 (also retroactively named version 21H2
+//! > and codenamed "Sun Valley") was released in October 2021. It carries the
+//! > build number 10.0.22000.
+//!
+//! # Interface definitions
+//!
 //! New for this version is that the [`struct@IVirtualDesktopNotification`]
 //! interface takes "monitors" as arguments, previously only the
 //! [`struct@IVirtualDesktopManagerInternal`] interface used them.
