@@ -2,6 +2,10 @@
     "editor.formatOnSave": true,
     "triggerTaskOnSave.restart": true,
     "rust-analyzer.cargo.features": "all",
+    "rust-analyzer.diagnostics.disabled": [
+        // This incorrectly warns for some macro generated code in the "interface.rs" file:
+        "non_camel_case_types"
+    ],
     "triggerTaskOnSave.tasks": {
         // "rust: cargo build": ["**/*.rs"]
     },
