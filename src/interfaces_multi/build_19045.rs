@@ -1,4 +1,9 @@
-//! Windows 10
+//! Windows 10 Version 22H2
+//!
+//! From
+//! [Wikipedia](https://en.wikipedia.org/wiki/Windows_10_version_history#Version_22H2_(2022_Update)):
+//! > The Windows 10 2022 Update (codenamed "22H2") is the thirteenth and final
+//! > major update to Windows 10. It carries the build number 10.0.19045.
 
 use super::*;
 use build_10240 as prev_build;

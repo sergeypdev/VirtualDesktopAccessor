@@ -1,4 +1,12 @@
-//! Support for Windows 10.
+//! Original Windows 10 version.
+//!
+//! From
+//! [Wikipedia](https://en.wikipedia.org/wiki/Windows_10_(original_release)):
+//! > The original version of Windows 10 (also retroactively named version 1507
+//! > and codenamed "Threshold 1") was released in July 2015. It carries the
+//! > build number 10.0.10240;
+//!
+//! # Interface definitions
 //!
 //! The [`struct@IVirtualDesktopNotification`] and
 //! [`struct@IVirtualDesktopManagerInternal`] interfaces do not take "monitor"

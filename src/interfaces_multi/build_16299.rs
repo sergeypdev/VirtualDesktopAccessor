@@ -1,3 +1,11 @@
+//! Windows 10 Version 1709 (Fall Creators Update)
+//!
+//! From [Wikipedia](https://en.wikipedia.org/wiki/Windows_10,_version_1709):
+//! > Windows 10 Fall Creators Update (also known as version 1709 and codenamed
+//! > "Redstone 3") is the fourth major update to Windows 10 and the third in a
+//! > series of updates under the Redstone codenames. It carries the build
+//! > number 10.0.16299.
+
 use super::*;
 use build_10240 as prev_build;
 

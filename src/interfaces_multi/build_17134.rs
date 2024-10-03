@@ -1,3 +1,11 @@
+//! Windows 10 Version 1803 (April 2018 Update)
+//!
+//! From [Wikipedia](https://en.wikipedia.org/wiki/Windows_10,_version_1803):
+//! > Windows 10 April 2018 Update (also known as version 1803 and codenamed
+//! > "Redstone 4") is the fifth major update to Windows 10 and the fourth in a
+//! > series of updates under the Redstone codenames. It carries the build
+//! > number 10.0.17134.
+
 use super::*;
 use build_10240 as prev_build;
 
