@@ -48,11 +48,16 @@ macro_rules! declare_versions {
     };
 }
 declare_versions!(
+    // Windows 10:
     mod build_10240;
     mod build_16299; // IDD change
     mod build_17134; // IDD change
     mod build_19045; // IDD change
+    // Windows 10 Enterprise LTSC (Long-Term Servicing Channel)
+    mod build_19044_4355; // IDD change
+    // Windows Server:
     mod build_20348; // Interface change
+    // Windows 11:
     mod build_22000; // Interface change
     mod build_22621_2215; // Interface change
     mod build_22621_3155; // IID change

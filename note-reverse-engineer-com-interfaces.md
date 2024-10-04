@@ -55,4 +55,3 @@ It can also be worth looking at similar virtual desktop libraries to see if they
     - These are actually compiled when the app is executed by the `ComInterfaceAssemblyBuilder.CreateAssembly` method at: [src/VirtualDesktop/Interop/ComInterfaceAssemblyBuilder.cs](https://github.com/Slion/VirtualDesktop/blob/main/src/VirtualDesktop/Interop/ComInterfaceAssemblyBuilder.cs)
 
 - [MScholtes/VirtualDesktop](https://github.com/MScholtes/VirtualDesktop): C# command line tool to manage virtual desktops in Windows 10
-  
