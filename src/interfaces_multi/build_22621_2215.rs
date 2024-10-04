@@ -18,12 +18,13 @@
 //!   Ciantic/VirtualDesktopAccessor@c918946](https://github.com/Ciantic/VirtualDesktopAccessor/commit/c918946421c42a7f022abdf8b4672a4b3ddf2f35#diff-e073b55bb9e1746ee6b3a029ba955df76b3d61e774585c23535bd0b4967d9e18)
 //! - <https://github.com/mzomparelli/VirtualDesktop/tree/7e37b9848aef681713224dae558d2e51960cf41e/src/VirtualDesktop/Interop/Build22621_2215>
 use super::*;
+use build_22000 as build_prev;
 
 // These interfaces haven't changed since the first version:
-build_10240::IApplicationView!("372E1D3B-38D3-42E4-A15B-8AB2B178F513");
-build_10240::IApplicationViewCollection!("1841C6D7-4F9D-42C0-AF41-8747538F10E5");
-build_10240::IVirtualDesktopNotificationService!("0cd45e71-d927-4f15-8b0a-8fef525337bf");
-build_10240::IVirtualDesktopPinnedApps!("4CE81583-1E4C-4632-A621-07A53543148F");
+build_prev::IApplicationView!("372E1D3B-38D3-42E4-A15B-8AB2B178F513");
+build_prev::IApplicationViewCollection!("1841C6D7-4F9D-42C0-AF41-8747538F10E5");
+build_prev::IVirtualDesktopNotificationService!("0cd45e71-d927-4f15-8b0a-8fef525337bf");
+build_prev::IVirtualDesktopPinnedApps!("4CE81583-1E4C-4632-A621-07A53543148F");
 
 // But these interfaces have different methods:
 

@@ -51,7 +51,8 @@ declare_versions!(
     // Windows 10:
     mod build_10240;
     mod build_16299; // IDD change
-    mod build_17134; // IDD change
+    mod build_17134; // Interface change (only for unused methods, but still IDD change)
+    mod build_17663; // Interface change (only for unused methods, but still IDD change)
     mod build_19045; // IDD change
     // Windows 10 Enterprise LTSC (Long-Term Servicing Channel)
     mod build_19044_4355; // IDD change
