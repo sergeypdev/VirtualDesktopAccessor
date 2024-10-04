@@ -43,41 +43,6 @@ impl Default for WindowsVersion {
         *Self::ALL.last().expect("No Windows version is supported")
     }
 }
-// Check that the versions are sorted when they were declared, this is a bit
-// slow currently so it has been disabled:
-// impl WindowsVersion {
-//      #[allow(dead_code)]
-//      const fn has_sorted_versions() -> bool {
-//          let mut prev = 0;
-//          let ix = 0;
-//          let arr = Self::ALL;
-//          while ix < arr.len() {
-//              let ver = arr[ix].windows_build();
-//              if ver < prev {
-//                  return false;
-//              }
-//              prev = ver;
-//          }
-//          true
-//      }
-//      /// Code from <https://docs.rs/static_assertions/latest/src/static_assertions/const_assert.rs.html#52-57>
-//      const _ASSERT_SORTED_VERSIONS: [(); 0 - !Self::has_sorted_versions() as usize] = [];
-//      const fn windows_build(&self) -> u32 {
-//          let name = self.as_str();
-//          let bytes = name.as_bytes();
-//          let mut ix = 0;
-//          while ix < bytes.len() && !u8::is_ascii_digit(&bytes[ix]) {
-//              ix += 1;
-//          }
-//          let mut parsed = 0;
-//          while ix < bytes.len() {
-//              parsed *= 10;
-//              parsed += (bytes[ix] - b'0') as u32;
-//              ix += 1;
-//          }
-//          parsed
-//      }
-// }
 impl WindowsVersion {
     /// Returns the Windows build and Windows patch that a Rust module with COM
     /// interfaces supports. (It might support some later versions as well.)
@@ -200,7 +165,7 @@ impl WindowsVersion {
                 .filter(|(_, full_ver)| {
                     *full_ver <= (version.dwBuildNumber, patch_version.unwrap_or(u32::MAX))
                 })
-                // Then find the latest one:
+                // Then find the latest one (don't assume the original versions are sorted):
                 .max_by_key(|(_, version)| *version)
                 .map(|(v, _)| v)
                 .unwrap_or_default();
