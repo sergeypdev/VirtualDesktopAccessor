@@ -2,6 +2,8 @@
 
 To manipulate virtual desktops in Windows it is required to use unstable COM interface that might change between Windows versions. This document therefore describes the process used to support new Windows versions.
 
+----
+
 [Issue #14 ("Reverse engineering process") on the C# library Slion/VirtualDesktop](https://github.com/Slion/VirtualDesktop/issues/14) describes how they go about finding the definition for the relevant COM interfaces:
 
 > We need to document the reverse engineering process to make it easier to support future versions of Windows.
@@ -9,12 +11,16 @@ To manipulate virtual desktops in Windows it is required to use unstable COM int
 > My understanding is that you need to run a Python script from a fork of [GetVirtualDesktopAPI_DIA] that dumps the GUIDs and interfaces definitions from `twinui.pcshell.dll` using [Debug Interface Access] and [Microsoft Symbol Server].
 >
 > It would be nice to port that Python script to C# and integrate it to this repository. That would make it even easier to perform reverse engineering.
+>
+> [GetVirtualDesktopAPI_DIA]: https://github.com/mzomparelli/GetVirtualDesktopAPI_DIA
+> [Debug Interface Access]: https://learn.microsoft.com/en-us/visualstudio/debugger/debug-interface-access/debug-interface-access-sdk
+> [Microsoft Symbol Server]: https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/microsoft-public-symbols
 
-[GetVirtualDesktopAPI_DIA]: https://github.com/mzomparelli/GetVirtualDesktopAPI_DIA
-[Debug Interface Access]: https://learn.microsoft.com/en-us/visualstudio/debugger/debug-interface-access/debug-interface-access-sdk
-[Microsoft Symbol Server]: https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/microsoft-public-symbols
+The python script mentioned above has been mostly reimplemented in Rust, see the `print-com-interfaces` subdirectory.
 
-Another relevant source is the [Readme for the Slion/VirtualDesktop C# library](https://github.com/Slion/VirtualDesktop/blob/7e37b9848aef681713224dae558d2e51960cf41e/README.md#windows-version-support):
+----
+
+The [Readme for the Slion/VirtualDesktop C# library](https://github.com/Slion/VirtualDesktop/blob/7e37b9848aef681713224dae558d2e51960cf41e/README.md#windows-version-support) also has some useful information for easily finding the current interface ids:
 
 > ### Windows version support
 >
@@ -47,7 +53,9 @@ Another relevant source is the [Readme for the Slion/VirtualDesktop C# library](
 >
 > [app.config]: https://github.com/Slion/VirtualDesktop/blob/7e37b9848aef681713224dae558d2e51960cf41e/src/VirtualDesktop/app.config
 
-It can also be worth looking at similar virtual desktop libraries to see if they already support the Windows version in question:
+----
+
+It can be worth looking at other similar virtual desktop libraries to see if they already support the Windows version in question:
 
 - [Slion/VirtualDesktop](https://github.com/Slion/VirtualDesktop): C# wrapper for the Virtual Desktop API on Windows 11.
   - Interface ids in [src/VirtualDesktop/app.config](https://github.com/Slion/VirtualDesktop/blob/main/src/VirtualDesktop/app.config)
