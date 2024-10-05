@@ -23,7 +23,7 @@ use std::{
 use symbolic_demangle::Demangle as _;
 use symsrv::SymsrvDownloader;
 
-/// Contains virtual function tables (vftables). Also contains IID values for IApplicationView and IApplicationViewCollection.
+/// Contains virtual function tables (vftables).
 const TWINUI_PCSHELL_PATH: &str = r"C:\Windows\System32\twinui.pcshell.dll";
 
 /// Contains IID values for private virtual desktop interfaces
