@@ -6,6 +6,10 @@
         // This incorrectly warns for some macro generated code in the "interface.rs" file:
         "non_camel_case_types"
     ],
+    "rust-analyzer.linkedProjects": [
+        "Cargo.toml",
+        "print-com-interfaces/Cargo.toml"
+    ],
     "triggerTaskOnSave.tasks": {
         // "rust: cargo build": ["**/*.rs"]
     },

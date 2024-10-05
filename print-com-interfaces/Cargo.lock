@@ -623,6 +623,7 @@ dependencies = [
  "symbolic-demangle",
  "symsrv",
  "tokio",
+ "uuid",
 ]
 
 [[package]]

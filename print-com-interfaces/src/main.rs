@@ -23,11 +23,11 @@ use std::{
 use symbolic_demangle::Demangle as _;
 use symsrv::SymsrvDownloader;
 
+/// Contains virtual function tables (vftables). Also contains IID values for IApplicationView and IApplicationViewCollection.
 const TWINUI_PCSHELL_PATH: &str = r"C:\Windows\System32\twinui.pcshell.dll";
 
-// This dll doesn't seem to have any relevant symbols, but it was searched by
-// the original Python script:
-// const ACTXPRXY_PATH: &str = r"C:\Windows\System32\actxprxy.dll";
+/// Contains IID values for private virtual desktop interfaces
+const ACTXPRXY_PATH: &str = r"C:\Windows\System32\actxprxy.dll";
 
 /// Parts of known mangled names for vtables
 const VIRTUAL_DESKTOP_V_TABLE_NAMES: &[&str] = &[
@@ -36,8 +36,7 @@ const VIRTUAL_DESKTOP_V_TABLE_NAMES: &[&str] = &[
     "??_7CVirtualDesktopNotificationsDerived@@6BIVirtualDesktopNotification@@@",
     "??_7CVirtualDesktopNotificationsDerived@@6B@",
     "??_7CVirtualDesktopHotkeyHandler@@6B@",
-    "??_7CVirtualDesktopHotkeyHandler@@6B@",
-    "??_7VirtualDesktopsAp",
+    "??_7VirtualDesktopsApi@@6B@",
     "??_7VirtualPinnedAppsHandler@@6B?$Chain",
 ];
 
@@ -252,7 +251,8 @@ async fn main() -> eyre::Result<()> {
     let downloader = setup_download_next_to_exe();
 
     let mut twinui = PeFile::new(TWINUI_PCSHELL_PATH);
-    let mut pe_files = [&mut twinui];
+    let mut actxprxy = PeFile::new(ACTXPRXY_PATH);
+    let mut pe_files = [&mut twinui, &mut actxprxy];
 
     for pe_file in &mut pe_files {
         pe_file.download_pdb(&downloader).await?;
@@ -263,156 +263,176 @@ async fn main() -> eyre::Result<()> {
     }
 
     let mut twinui_pdb = twinui.open_pdb()?;
+    let mut actxprxy_pdb = actxprxy.open_pdb()?;
 
-    let twinui_debug = twinui_pdb.debug_information()?;
-    let twinui_modules = twinui_debug.modules()?.collect::<Vec<_>>()?;
-
-    let mut twinui_fn_info = twinui.open_pdb()?;
-    twinui_fn_info.debug_information()?;
-
-    if !twinui_fn_info.type_information()?.is_empty() {
+    if !twinui_pdb.type_information()?.is_empty() {
         eprintln!("Info: Type info isn't empty as was expected, perhaps it could be useful");
     }
-    if !twinui_fn_info.frame_table()?.is_empty() {
+    if !twinui_pdb.frame_table()?.is_empty() {
         eprintln!("Info: Frame table isn't empty as was expected, perhaps it could be useful");
     }
-    if !twinui_fn_info.id_information()?.is_empty() {
+    if !twinui_pdb.id_information()?.is_empty() {
         eprintln!("Info: Id information isn't empty as was expected, perhaps it could be useful");
     }
 
-    let mut symbol_lookup = HashMap::new();
+    // actxprxy related:
+    let actxprxy_symbols = actxprxy_pdb.global_symbols()?;
+    let actxprxy_address_map = actxprxy_pdb.address_map()?;
 
-    let mut total_in_modules = 0;
-    for module in twinui_modules.iter() {
-        //println!("#{module_index} module name: {}, object file name: {}",module.module_name(),module.object_file_name());
-        let info = match twinui_fn_info.module_info(module)? {
-            Some(info) => {
-                let count = info.symbols()?.count()?;
-                total_in_modules += count;
-                //println!("\tcontains {count} symbols");
-                info
-            }
-            None => {
-                //println!("\tmodule information not available");
-                continue;
-            }
-        };
-        let mut syms = info.symbols()?;
-        while let Some(sym) = syms.next()? {
-            let _parsed = sym.parse()?;
-            // println!("\tModule symbol: {parsed:?}");
-        }
-    }
-
-    let twinui_symbols = twinui_fn_info.global_symbols()?;
-    let twinui_address_map = twinui_fn_info.address_map()?;
-    twinui_fn_info.debug_information()?;
-
-    let mut all_symbols = twinui_symbols
+    let mut actxprxy_all_symbols = actxprxy_symbols
         .iter()
         .map(|sym| Ok((None, sym)))
         .collect::<Vec<_>>()?;
-    calculate_size_for_symbols(all_symbols.as_mut_slice(), &twinui_address_map);
-    for (info, sym) in &all_symbols {
+    calculate_size_for_symbols(actxprxy_all_symbols.as_mut_slice(), &actxprxy_address_map);
+
+    let actxprxy_data = actxprxy.read_dll()?;
+
+    // twinui realted:
+    let mut symbol_lookup = HashMap::new();
+
+    let twinui_symbols = twinui_pdb.global_symbols()?;
+    let twinui_address_map = twinui_pdb.address_map()?;
+
+    let mut twinui_all_symbols = twinui_symbols
+        .iter()
+        .map(|sym| Ok((None, sym)))
+        .collect::<Vec<_>>()?;
+    calculate_size_for_symbols(twinui_all_symbols.as_mut_slice(), &twinui_address_map);
+    for (info, sym) in &twinui_all_symbols {
         let Some(info) = info else { continue };
         symbol_lookup.insert(info.rva, (info, sym));
     }
 
-    println!(
-        "Symbols in modules compared to global: {}/{}",
-        total_in_modules,
-        all_symbols.len()
-    );
-
     let twinui_data = twinui.read_dll()?;
-    let image_base = object::File::parse(twinui_data.as_slice())?.relative_address_base();
+    let twinui_image_base = object::File::parse(twinui_data.as_slice())?.relative_address_base();
 
-    for (size, symbol) in &all_symbols {
+    // Search both dll files even though we are likely only interested in IID from actxprxy.dll:
+    let pdb_related = [
+        (&actxprxy_address_map, &actxprxy_all_symbols, &actxprxy_data),
+        (&twinui_address_map, &twinui_all_symbols, &twinui_data),
+    ];
+    for related in pdb_related {
+        let (address_map, all_symbols, dll_data) = related;
+
+        for (size, symbol) in all_symbols {
+            let Ok(pdb::SymbolData::Public(data)) = symbol.parse() else {
+                continue;
+            };
+            if !data.name.as_bytes().starts_with(b"IID_") {
+                // Note an interface id.
+                continue;
+            }
+            if !unfiltered
+                && !data.name.to_string().contains("VirtualDesktop")
+                // Note: IApplicationView iid is not in any of the dlls we are currently searching
+                && !data.name.to_string().contains("IApplicationView")
+            {
+                // Likely not an interface id we are interested in.
+                continue;
+            }
+            if size.unwrap_or_default().size < 16 {
+                eyre::bail!(
+                    "Expected IID size to be 16 or larger but it was {}",
+                    size.unwrap_or_default().size
+                );
+            }
+            let rva = data.offset.to_rva(address_map).unwrap_or_default();
+            let iid = &dll_data[rva.0 as usize..][..16];
+            let iid = uuid::Uuid::from_slice_le(iid).context("Failed to parse IID as GUID")?;
+
+            println!("\n");
+            println!("{}", data.name);
+            println!("\tIID: {iid:X}");
+            println!();
+        }
+    }
+
+    for (size, symbol) in &twinui_all_symbols {
         // Will be either SymbolData::ProcedureReference or
         // SymbolData::Public
 
-        if let Ok(pdb::SymbolData::Public(data)) = symbol.parse() {
-            // we found the location of a function!
-            let rva = data.offset.to_rva(&twinui_address_map).unwrap_or_default();
-            let name = data.name.to_string();
+        let Ok(pdb::SymbolData::Public(data)) = symbol.parse() else {
+            continue;
+        };
+        let rva = data.offset.to_rva(&twinui_address_map).unwrap_or_default();
+        let name = data.name.to_string();
 
-            // These filtering rules were ported from the Python script:
-            if !(unfiltered
-                || (VIRTUAL_DESKTOP_V_TABLE_NAMES
-                    .iter()
-                    .any(|part| name.contains(part))
-                    || (name.contains("_7CWin32ApplicationView")
-                        && name.contains("IApplicationView")
-                        && !name.contains("Microsoft")
-                        && !name.contains("IApplicationViewBase"))))
-            {
-                // This symbol likely isn't relevant.
+        // These filtering rules were ported from the Python script:
+        if !(unfiltered
+            || (VIRTUAL_DESKTOP_V_TABLE_NAMES
+                .iter()
+                .any(|part| name.contains(part))
+                || (name.contains("_7CWin32ApplicationView")
+                    && name.contains("IApplicationView")
+                    && !name.contains("Microsoft")
+                    && !name.contains("IApplicationViewBase"))))
+        {
+            // This symbol likely isn't relevant.
+            continue;
+        }
+
+        let name_info = symbolic_common::Name::new(
+            data.name.to_string(),
+            symbolic_common::NameMangling::Unknown,
+            symbolic_common::Language::Unknown,
+        );
+        let lang = name_info.detect_language();
+        let demangled = name_info.demangle(symbolic_demangle::DemangleOptions::complete());
+
+        if !matches!(&demangled, Some(demangled) if demangled.contains("vftable")) {
+            // Not a vtable definition!
+            continue;
+        }
+        println!("\n");
+        println!("{} is {}", rva.0, data.name);
+        if let Some(name) = &demangled {
+            println!("\tDemangeled name ({lang:?}): {name}");
+        }
+        if let Some(size) = size {
+            println!("\tEstimated Size: {}", size.size);
+        }
+        println!("\t{:?}", data);
+        println!();
+
+        let vft_data = &twinui_data[rva.0 as usize..][..size.unwrap_or_default().size as usize];
+        let vft_ptrs = vft_data
+            .chunks_exact(8)
+            .map(|bytes| {
+                u64::from_le_bytes(bytes.try_into().expect("slices should be 8 bytes long"))
+            })
+            .map(|ptr| ptr.saturating_sub(twinui_image_base));
+        for (method_index, method_ptr) in vft_ptrs.enumerate() {
+            let Ok(method_ptr) = u32::try_from(method_ptr) else {
+                eprintln!(
+                    "Warning: a method address in the DLL didn't fit in 32bit and was ignored"
+                );
+                println!("\tMethod {method_index:02}: Unknown ({:x})", method_ptr);
                 continue;
-            }
+            };
+            let method_ptr = Rva(method_ptr);
+
+            let Some((_info, sym)) = symbol_lookup.get(&method_ptr) else {
+                println!("\tMethod {method_index:02}: Unknown ({:x})", method_ptr.0);
+                continue;
+            };
+
+            let Ok(pdb::SymbolData::Public(sym)) = sym.parse() else {
+                unreachable!("previously parsed symbol when gather address info");
+            };
 
             let name_info = symbolic_common::Name::new(
-                data.name.to_string(),
+                sym.name.to_string(),
                 symbolic_common::NameMangling::Unknown,
                 symbolic_common::Language::Unknown,
             );
-            let lang = name_info.detect_language();
+            let _lang = name_info.detect_language();
             let demangled = name_info.demangle(symbolic_demangle::DemangleOptions::complete());
 
-            if !matches!(&demangled, Some(demangled) if demangled.contains("vftable")) {
-                // Not a vtable definition!
-                continue;
-            }
-            println!("\n");
-            println!("{} is {}", rva.0, data.name);
-            if let Some(name) = &demangled {
-                println!("\tDemangeled name ({lang:?}): {name}");
-            }
-            if let Some(size) = size {
-                println!("\tEstimated Size: {}", size.size);
-            }
-            println!("\t{:?}", data);
-            println!();
-
-            let vft_data = &twinui_data[rva.0 as usize..][..size.unwrap_or_default().size as usize];
-            let vft_ptrs = vft_data
-                .chunks_exact(8)
-                .map(|bytes| {
-                    u64::from_le_bytes(bytes.try_into().expect("slices should be 8 bytes long"))
-                })
-                .map(|ptr| ptr.saturating_sub(image_base));
-            for (method_index, method_ptr) in vft_ptrs.enumerate() {
-                let Ok(method_ptr) = u32::try_from(method_ptr) else {
-                    eprintln!(
-                        "Warning: a method address in the DLL didn't fit in 32bit and was ignored"
-                    );
-                    println!("\tMethod {method_index:02}: Unknown ({:x})", method_ptr);
-                    continue;
-                };
-                let method_ptr = Rva(method_ptr);
-
-                if let Some((_info, sym)) = symbol_lookup.get(&method_ptr) {
-                    if let Ok(pdb::SymbolData::Public(sym)) = sym.parse() {
-                        let name_info = symbolic_common::Name::new(
-                            sym.name.to_string(),
-                            symbolic_common::NameMangling::Unknown,
-                            symbolic_common::Language::Unknown,
-                        );
-                        let _lang = name_info.detect_language();
-                        let demangled =
-                            name_info.demangle(symbolic_demangle::DemangleOptions::complete());
-
-                        println!(
-                            "\tMethod {method_index:02}: {} ({})",
-                            demangled.unwrap_or_default(),
-                            sym.name
-                        )
-                    } else {
-                        unreachable!("previously parsed symbol when gather address info");
-                    }
-                } else {
-                    println!("\tMethod {method_index:02}: Unknown ({:x})", method_ptr.0);
-                }
-            }
+            println!(
+                "\tMethod {method_index:02}: {} ({})",
+                demangled.unwrap_or_default(),
+                sym.name
+            )
         }
     }
 
