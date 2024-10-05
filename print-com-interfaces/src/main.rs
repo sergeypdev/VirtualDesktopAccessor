@@ -26,7 +26,10 @@ use symsrv::SymsrvDownloader;
 /// Contains virtual function tables (vftables).
 const TWINUI_PCSHELL_PATH: &str = r"C:\Windows\System32\twinui.pcshell.dll";
 
-/// Contains IID values for private virtual desktop interfaces
+/// Contains IID values for private virtual desktop interfaces.
+///
+/// Note that we can read interface ids from the Windows registry as well if we
+/// can't find them here.
 const ACTXPRXY_PATH: &str = r"C:\Windows\System32\actxprxy.dll";
 
 /// Parts of known mangled names for vtables
@@ -38,6 +41,7 @@ const VIRTUAL_DESKTOP_V_TABLE_NAMES: &[&str] = &[
     "??_7CVirtualDesktopHotkeyHandler@@6B@",
     "??_7VirtualDesktopsApi@@6B@",
     "??_7VirtualPinnedAppsHandler@@6B?$Chain",
+    "??_7ApplicationViewCollectionBase@@6B@",
 ];
 
 /// The code ID for a Windows PE file.
