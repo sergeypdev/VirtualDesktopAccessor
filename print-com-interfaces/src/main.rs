@@ -600,7 +600,7 @@ async fn main() -> eyre::Result<()> {
         .map(|info| info.estimate_symbol_sizes())
         .transpose()?;
 
-    // twinui realted:
+    // twinui related:
     let twinui_info = (!skip_twinui)
         .then(|| DllRelated::collect(&twinui))
         .transpose()?;
