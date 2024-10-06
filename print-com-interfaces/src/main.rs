@@ -146,8 +146,7 @@ impl WindowsVersion {
         }
         u32::try_from(patch_version).ok()
     }
-    /// Get info about the current Windows version. Only differentiates between
-    /// Windows versions that have different virtual desktop interfaces.
+    /// Get info about the current Windows version.
     ///
     /// # Determining Windows Version
     ///
