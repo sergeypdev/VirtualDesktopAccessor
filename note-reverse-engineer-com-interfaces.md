@@ -16,7 +16,7 @@ To manipulate virtual desktops in Windows it is required to use unstable COM int
 > [Debug Interface Access]: https://learn.microsoft.com/en-us/visualstudio/debugger/debug-interface-access/debug-interface-access-sdk
 > [Microsoft Symbol Server]: https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/microsoft-public-symbols
 
-The python script mentioned above has been mostly reimplemented in Rust, see the `print-com-interfaces` subdirectory.
+The python script mentioned above has been mostly reimplemented in Rust, see the [`print-com-interfaces`](./print-com-interfaces) subdirectory.
 
 ----
 
