@@ -1,0 +1,31 @@
+[package]
+name = "print-com-interfaces"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Find information about Virtual Desktop COM interfaces from debug info provided by Microsoft Symbol Server"
+
+[dependencies]
+eyre = "0.6.12" # Nicer Rust errors
+tokio = { version = "1.40.0", features = ["rt-multi-thread", "macros"] } # Async runtime
+clap = { version = "4.5.19", features = ["derive"] } # CLI argument parsing
+
+object = "0.36.4" # Parse DLL to get unique breakpad debug id associated with PDB file
+debugid = "0.8.0" # Format breakpad id as string
+symsrv = "0.5.3" # Download PDB file from Microsoft Symbol Server
+pdb = { package = "pdb", version = "0.8" } # Parse PDB file
+symbolic-demangle = "12.12.0" # Interpret symbol names
+symbolic-common = "12.12.0"   # Exposes types used by symbolic-demangle
+uuid = "1.10.0" # Parse and print GUID interface ids
+windows = { version = "0.58.0", features = [
+    "Win32_System_SystemInformation",
+    "Wdk_System_SystemServices",
+    "Win32_System_Registry"
+] } # Get Windows version + read registry to find IID
+
+# symbolic-debuginfo = "12.12.0" # Alternative to object and pdb crates (too simple API, only exposes functions)
+# pdb-addr2line = "0.10.4" # Requires type information that has been removed from the PDB files we are reading.
+
+
+# Don't make this a part of the root workspace:
+[workspace]
