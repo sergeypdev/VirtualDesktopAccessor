@@ -89,7 +89,8 @@ fn actxprxy_path() -> eyre::Result<PathBuf> {
 /// Parts of known mangled names for vtables
 const VIRTUAL_DESKTOP_V_TABLE_NAMES: &[&str] = &[
     "??_7CVirtualDesktop@@6BIVirtualDesktop@@@",
-    "??_7CVirtualDesktopManager@@6B?$ImplementsHelper@U?$RuntimeClassFlags@$02@WRL@Microsoft@@$00UIVirtualDesktopManagerInternal@@UISuspendableVirtualDesktopManager@@VFtmBase@23@@Details@WRL@Microsoft@@@",
+    "??_7CVirtualDesktop@@6B?$Chain",
+    "??_7CVirtualDesktopManager@@6BIVirtualDesktopManagerInternal2@@@",
     "??_7CVirtualDesktopNotificationsDerived@@6BIVirtualDesktopNotification@@@",
     "??_7CVirtualDesktopNotificationsDerived@@6B@",
     "??_7CVirtualDesktopHotkeyHandler@@6B@",
