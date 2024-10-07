@@ -6,9 +6,10 @@ use object::{
     Object as _,
 };
 use pdb::{FallibleIterator, Rva, PDB};
-use std::{collections::HashMap, fmt, fs::File, path::PathBuf, str::FromStr};
+use std::{collections::HashMap, fmt, fs::File, path::PathBuf, rc::Rc, str::FromStr};
 use symbolic_demangle::Demangle as _;
 use symsrv::SymsrvDownloader;
+use windows::{core::Owned, Win32::System::Registry::HKEY};
 
 /// This program uses [Microsoft Symbol Server] to get debug symbols for
 /// `twinui.pcshell.dll` and then searches those symbols for information related
@@ -51,6 +52,14 @@ struct Args {
     /// Don't use any information from `actxprxy.dll`.
     #[clap(long, conflicts_with = "actxprxy_dll_id")]
     skip_actxprxy: bool,
+
+    /// Don't print the current Windows version. Implied if a DLL PeCodeId is specified.
+    #[clap(long)]
+    skip_windows_version: bool,
+
+    /// Don't search for interface ids in the Windows registry. Implied if a DLL PeCodeId is specified.
+    #[clap(long)]
+    skip_windows_registry: bool,
 }
 
 fn system32() -> eyre::Result<PathBuf> {
@@ -73,9 +82,6 @@ fn twinui_pcshell_path() -> eyre::Result<PathBuf> {
 }
 
 /// Contains IID values for private virtual desktop interfaces.
-///
-/// Note that we can read interface ids from the Windows registry as well if we
-/// can't find them here.
 fn actxprxy_path() -> eyre::Result<PathBuf> {
     Ok(system32()?.join("actxprxy.dll"))
 }
@@ -207,6 +213,160 @@ impl fmt::Display for WindowsVersion {
                 None => "N/A".to_owned(),
             }
         )
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct RegistryIIDs {
+    interface_key: Rc<Owned<HKEY>>,
+    index: u32,
+}
+impl RegistryIIDs {
+    /// Opens the registry directory
+    /// `HKEY_LOCAL_MACHINE\SOFTWARE\Classes\Interface`.
+    ///
+    /// # References
+    ///
+    /// - [RegOpenKeyExW in windows::Win32::System::Registry - Rust](https://microsoft.github.io/windows-docs-rs/doc/windows/Win32/System/Registry/fn.RegOpenKeyExW.html)
+    ///   - [RegOpenKeyExW function (winreg.h) - Win32 apps | Microsoft Learn](https://learn.microsoft.com/en-us/windows/win32/api/winreg/nf-winreg-regopenkeyexw)
+    ///   - [Registry Key Security and Access Rights - Win32 apps | Microsoft Learn](https://learn.microsoft.com/en-us/windows/win32/sysinfo/registry-key-security-and-access-rights)
+    pub fn open() -> eyre::Result<Self> {
+        use windows::{
+            core::w,
+            Win32::System::Registry::{
+                RegOpenKeyExW, HKEY_LOCAL_MACHINE, KEY_ENUMERATE_SUB_KEYS, KEY_QUERY_VALUE,
+            },
+        };
+
+        let mut result = HKEY::default();
+        unsafe {
+            RegOpenKeyExW(
+                HKEY_LOCAL_MACHINE,
+                w!(r#"SOFTWARE\Classes\Interface"#),
+                0,
+                KEY_ENUMERATE_SUB_KEYS | KEY_QUERY_VALUE,
+                &mut result,
+            )
+        }
+        .ok()?;
+
+        Ok(RegistryIIDs {
+            interface_key: Rc::new(unsafe { Owned::new(result) }),
+            index: 0,
+        })
+    }
+}
+impl Iterator for RegistryIIDs {
+    type Item = eyre::Result<(uuid::Uuid, String)>;
+
+    /// Get a subkey of the interface key and interpret its name as an interface
+    /// id and its default value as the interface name.
+    ///
+    /// # References
+    ///
+    /// - [RegEnumKeyW in windows::Win32::System::Registry - Rust](https://microsoft.github.io/windows-docs-rs/doc/windows/Win32/System/Registry/fn.RegEnumKeyW.html)
+    ///   - [RegEnumKeyW function (winreg.h) - Win32 apps | Microsoft Learn](https://learn.microsoft.com/en-us/windows/win32/api/winreg/nf-winreg-regenumkeyw)
+    ///   - [Registry element size limits - Win32 apps | Microsoft Learn](https://learn.microsoft.com/en-us/windows/win32/sysinfo/registry-element-size-limits)
+    /// - [RegGetValueW in windows::Win32::System::Registry - Rust](https://microsoft.github.io/windows-docs-rs/doc/windows/Win32/System/Registry/fn.RegGetValueW.html)
+    ///   - [RegGetValueW function (winreg.h) - Win32 apps | Microsoft Learn](https://learn.microsoft.com/en-us/windows/win32/api/winreg/nf-winreg-reggetvaluew)
+    fn next(&mut self) -> Option<Self::Item> {
+        use windows::{
+            core::PCWSTR,
+            Win32::{
+                Foundation::{ERROR_FILE_NOT_FOUND, ERROR_MORE_DATA, ERROR_NO_MORE_ITEMS},
+                System::Registry::{RegEnumKeyW, RegGetValueW, RRF_RT_REG_SZ},
+            },
+        };
+
+        loop {
+            // Key name can't be more than 255 characters long.
+            // Buffer that receives the name of the subkey, including the terminating null character.
+            // Only the name of the subkey, not the full key hierarchy.
+            let mut key_name = [0; 1024];
+            let result =
+                unsafe { RegEnumKeyW(**self.interface_key, self.index, Some(&mut key_name)) };
+            if result == ERROR_NO_MORE_ITEMS {
+                return None;
+            }
+            self.index += 1;
+            if let Err(e) = result.ok() {
+                return Some(Err(eyre::eyre!(e)).context(
+                    "Failed to open subkey of registry key \
+                    HKEY_LOCAL_MACHINE\\SOFTWARE\\Classes\\Interface",
+                ));
+            }
+
+            let key_str = match String::from_utf16(
+                &key_name[..key_name.iter().position(|&c| c == 0).unwrap_or_default()],
+            ) {
+                Ok(v) => v,
+                Err(e) => {
+                    return Some(Err(e).context(
+                        "Failed to convert name to utf16 for registry key in \
+                        HKEY_LOCAL_MACHINE\\SOFTWARE\\Classes\\Interface",
+                    ))
+                }
+            };
+            let iid = match uuid::Uuid::from_str(key_str.trim_matches(['{', '}'])) {
+                Ok(v) => v,
+                Err(e) => {
+                    return Some(Err(e).context(format!(
+                        "Failed to parse key name as guid for registry key \
+                        HKEY_LOCAL_MACHINE\\SOFTWARE\\Classes\\Interface\\{key_str}"
+                    )))
+                }
+            };
+
+            let mut heap_buffer;
+            let mut stack_buffer = [0_u16; 512];
+            let mut value_buf = stack_buffer.as_mut_slice();
+            let mut value_len: u32 = std::mem::size_of_val(value_buf) as u32;
+            let mut result = unsafe {
+                RegGetValueW(
+                    **self.interface_key,
+                    PCWSTR::from_raw(key_name.as_ptr()),
+                    PCWSTR::null(),
+                    RRF_RT_REG_SZ,
+                    None,
+                    Some(value_buf.as_mut_ptr() as *mut core::ffi::c_void),
+                    Some(&mut value_len),
+                )
+            };
+            if result == ERROR_MORE_DATA {
+                heap_buffer = vec![
+                    0_u16;
+                    value_len as usize / core::mem::size_of::<u16>()
+                        + (value_len % 2) as usize
+                ];
+                value_buf = heap_buffer.as_mut_slice();
+                result = unsafe {
+                    RegGetValueW(
+                        **self.interface_key,
+                        PCWSTR::from_raw(key_name.as_ptr()),
+                        PCWSTR::null(),
+                        RRF_RT_REG_SZ,
+                        None,
+                        Some(value_buf.as_mut_ptr() as *mut core::ffi::c_void),
+                        Some(&mut value_len),
+                    )
+                };
+            }
+            if result == ERROR_FILE_NOT_FOUND {
+                // No value (interface name) for this key, so ignore it.
+                continue;
+            }
+            if let Err(e) = result.ok() {
+                return Some(Err(eyre::eyre!(e)).context(format!(
+                    "Failed to read value for subkey of registry key \
+                    HKEY_LOCAL_MACHINE\\SOFTWARE\\Classes\\Interface\\{key_str}",
+                )));
+            }
+            let value_len = value_len as usize / core::mem::size_of::<u16>() - 1;
+
+            let value = String::from_utf16_lossy(&value_buf[..value_len]);
+
+            return Some(Ok((iid, value)));
+        }
     }
 }
 
@@ -510,17 +670,33 @@ async fn main() -> eyre::Result<()> {
         actxprxy_dll_id,
         skip_twinui,
         skip_actxprxy,
+        skip_windows_version,
+        skip_windows_registry,
     } = Args::parse();
 
     if twinui_dll_id.is_none() && actxprxy_dll_id.is_none() {
         println!("\nAnalyzing COM interfaces for local Windows installation.\n");
-        println!("Windows Version: {}\n\n", WindowsVersion::get()?);
+        if !skip_windows_version {
+            println!("Windows Version: {}\n\n", WindowsVersion::get()?);
+        }
 
-        // TODO: print IIDs from Windows registry
-        // HKEY_LOCAL_MACHINE\SOFTWARE\Classes\Interface
-
-        // https://stackoverflow.com/questions/17386755/get-keys-in-registry
-        // https://microsoft.github.io/windows-docs-rs/doc/windows/Win32/System/Registry/index.html
+        if !skip_windows_registry {
+            println!(
+                r"Interface ids (IID) from Registry key HKEY_LOCAL_MACHINE\SOFTWARE\Classes\Interface"
+            );
+            println!();
+            let reg_iids = RegistryIIDs::open()?;
+            for res in reg_iids {
+                let (iid, name) = res?;
+                if unfiltered
+                    || name.contains("VirtualDesktop")
+                    || (name.contains("ApplicationView") && !name.contains("CViewManagement"))
+                {
+                    println!("{iid} for {name}");
+                }
+            }
+            println!("\n");
+        }
     } else {
         println!("\nAnalyzing COM interfaces for specific DLL files using PE code ids.\n")
     }
@@ -534,6 +710,7 @@ async fn main() -> eyre::Result<()> {
         (&mut actxprxy, actxprxy_dll_id, skip_actxprxy),
     ];
 
+    println!("DLL and PDB information:");
     eprintln!(
         "\nFetching PDB (and DLLs if PE code ids were specified) from Microsoft Symbol Server"
     );
@@ -587,8 +764,8 @@ async fn main() -> eyre::Result<()> {
             pe_file.debug_id()?.breakpad()
         );
     }
-    println!("\n");
-    eprintln!("\nFinding interface ids (IID) in the DLL files using PDB debug info:\n");
+
+    println!("\n\nInterface ids (IID) read from the DLL files using PDB debug info:\n");
 
     // actxprxy related:
     let actxprxy_info = (!skip_actxprxy)
@@ -650,14 +827,11 @@ async fn main() -> eyre::Result<()> {
     println!();
 
     let (Some(twinui_info), Some(twinui_all_symbols)) = (&twinui_info, twinui_symbols) else {
-        eprintln!("Skipping virtual function tables because of --skip-twinui flag");
+        eprintln!("\nSkipping virtual function tables because of --skip-twinui flag\n");
         return Ok(());
     };
 
-    eprintln!(
-        "\n\n\nFinding virtual function tables for COM interfaces \
-        in the DLL files using PDB debug info:\n"
-    );
+    println!("\n\n\nVirtual function tables (vftable) for COM interfaces read from the DLL files using PDB debug info:");
 
     let mut symbol_lookup = HashMap::new();
     for (info, sym) in &twinui_all_symbols {
@@ -758,6 +932,7 @@ async fn main() -> eyre::Result<()> {
             )
         }
     }
+    eprintln!();
 
     Ok(())
 }
