@@ -55,6 +55,12 @@ The [Readme for the Slion/VirtualDesktop C# library](https://github.com/Slion/Vi
 
 ----
 
+[Issue #76 (Not working with Windows 11 22H2) on the C# library Grabacr07/VirtualDesktop](https://github.com/Grabacr07/VirtualDesktop/issues/76) has many comments about how to reverse engineer the COM interfaces. They also mention that the interface ids in the Windows registry can no longer be found by name (they might still be there without any name and could perhaps be found by searching for parts of their GUID even if some digits have changed).
+
+That issue thread also links to [Pull Request #1 (Add support for 22449 & correct naming by NyaMisty) on the C# library mntone/VirtualDesktop](https://github.com/mntone/VirtualDesktop/pull/1#issuecomment-922269079) which has more direct instructions for finding the interface ids.
+
+----
+
 It can be worth looking at other similar virtual desktop libraries to see if they already support the Windows version in question:
 
 - [Slion/VirtualDesktop](https://github.com/Slion/VirtualDesktop): C# wrapper for the Virtual Desktop API on Windows 11.
